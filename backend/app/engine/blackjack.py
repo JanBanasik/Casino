@@ -21,7 +21,7 @@ class BlackjackAction(str, enum.Enum):
     stand = "STAND"
 
 
-@dataclass
+@dataclass(slots=True)
 class BlackjackState:
     deck: list[str]
     player_hand: list[str]

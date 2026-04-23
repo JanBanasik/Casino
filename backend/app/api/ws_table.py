@@ -54,21 +54,24 @@ async def table_ws(
         async with async_session_factory() as db:
             svc = GameRoundService(db, redis)
             try:
-                if mtype == "new_round":
-                    sid = UUID(str(msg["session_id"]))
-                    bet = float(msg.get("bet", 10))
-                    _, public = await svc.new_round(user_id, sid, table_id, bet)
-                    await websocket.send_json({"type": "state", "payload": public})
-                elif mtype == "action":
-                    raw_action = str(msg.get("action", "")).upper()
-                    action = BlackjackAction(raw_action)
-                    out = await svc.apply_player_action(user_id, table_id, action)
-                    payload = dict(out["public"])
-                    if out.get("retention"):
-                        payload["retention"] = out["retention"]
-                    await websocket.send_json({"type": "state", "payload": payload})
-                else:
-                    await websocket.send_json({"error": "unknown_type"})
+                match mtype:
+                    case "new_round":
+                        sid = UUID(str(msg["session_id"]))
+                        bet = float(msg.get("bet", 10))
+                        _, public = await svc.new_round(user_id, sid, table_id, bet)
+                        await websocket.send_json({"type": "state", "payload": public})
+                    case "action":
+                        raw_action = str(msg.get("action", "")).upper()
+                        action = BlackjackAction(raw_action)
+                        out = await svc.apply_player_action(user_id, table_id, action)
+                        payload = dict(out["public"])
+                        if out.get("retention"):
+                            payload["retention"] = out["retention"]
+                        await websocket.send_json({"type": "state", "payload": payload})
+                    case None:
+                        await websocket.send_json({"error": "missing_type"})
+                    case _:
+                        await websocket.send_json({"error": "unknown_type"})
             except ValueError as e:
                 await websocket.send_json({"error": str(e)})
             except KeyError as e:
