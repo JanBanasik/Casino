@@ -6,6 +6,11 @@
 
 Celem projektu jest zaprezentowanie skuteczności algorytmów takich jak Q-Learning (i opcjonalnie PPO) w środowisku gier o niepełnej informacji oraz implementacja mechanizmów retencji użytkownika. Projekt jest przygotowany do łatwego wdrożenia (high-performance) dzięki nowoczesnej architekturze.
 
+### Dokumentacja uzupełniająca
+
+- Architektura MVP backendu: [docs/backend-mvp-architecture.md](docs/backend-mvp-architecture.md)
+- Następne kroki (backlog): [docs/next-steps.md](docs/next-steps.md)
+
 ## 2. Stos Technologiczny i Uzasadnienie
 
 ### Backend
