@@ -25,3 +25,7 @@ Thumbs.db
 
 # Optional local experiments (keep pyproject/notebook if you track the folder)
 test_rl/.venv/
+
+# Node
+node_modules/
+frontend/dist/

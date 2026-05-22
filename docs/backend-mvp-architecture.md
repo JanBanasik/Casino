@@ -18,8 +18,8 @@ flowchart LR
 
 - **PostgreSQL**: użytkownicy, portfele, transakcje, sesje gier, rundy (w tym `ai_actions` jako JSON).
 - **Redis**: gorący stan stołu pod kluczem `table:{table_id}:state` (TTL z konfiguracji).
-- **REST**: `/api/health`, `/api/auth/*`, `/api/wallet/*`, `/api/sessions/*`.
-- **WebSocket**: `/ws/tables/{table_id}?token=...` — wiadomości JSON (`new_round`, `action`).
+- **REST**: `/api/health`, `/api/auth/*`, `/api/wallet/*`, `/api/sessions/*`, `POST /api/sessions/{id}/ws-ticket`.
+- **WebSocket**: `/ws/tables/{table_id}` — auth przez pierwszą wiadomość `{"type":"auth","ticket":"..."}` (ticket z REST, TTL 120s, single-use w Redis).
 
 ## Moduły backendu
 
@@ -68,9 +68,10 @@ sequenceDiagram
     end
 ```
 
-## Uwagi bezpieczeństwa (MVP)
+## Uwagi bezpieczeństwa
 
-- Token JWT w query WebSocketa jest wygodny na etapie prototypu; w produkcji rozważ krótkotrwałe tokeny stołu lub pierwszą wiadomość połączenia zamiast logowania tokenem w URL (ryzyko wycieku przez Referrer / logi proxy).
+- JWT w nagłówku `Authorization` dla REST.
+- WebSocket: krótkotrwałe bilety (`ws_ticket:{jti}`) w Redis zamiast JWT w query string — brak wycieku w logach proxy / historii przeglądarki.
 
 ## Porty developerskie (docker-compose)
 

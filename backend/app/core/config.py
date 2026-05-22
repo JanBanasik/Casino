@@ -16,5 +16,8 @@ class Settings(BaseSettings):
 
     table_state_ttl_seconds: int = 3600
 
+    ws_ticket_ttl_seconds: int = 120
+    ws_auth_timeout_seconds: int = 10
+
 
 settings = Settings()

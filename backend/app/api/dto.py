@@ -36,3 +36,13 @@ class SessionResponse(BaseModel):
     id: UUID
     game_type: str
     started_at: str
+
+
+class WsTicketRequest(BaseModel):
+    table_id: str = Field(default="default", min_length=1, max_length=64)
+
+
+class WsTicketResponse(BaseModel):
+    ticket: str
+    table_id: str
+    expires_in: int

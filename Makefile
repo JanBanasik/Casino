@@ -1,9 +1,25 @@
-.PHONY: install lock test migrate revision dev docker-up docker-down lint
+.PHONY: install lock test migrate revision dev docker-up docker-down lint frontend-install frontend-dev frontend-build prod-up prod-down
 
 BACKEND := backend
+FRONTEND := frontend
 
 install:
 	cd $(BACKEND) && uv sync --all-groups
+
+frontend-install:
+	cd $(FRONTEND) && npm install
+
+frontend-dev:
+	cd $(FRONTEND) && npm run dev
+
+frontend-build:
+	cd $(FRONTEND) && npm run build
+
+prod-up:
+	docker compose -f docker-compose.prod.yml up -d --build
+
+prod-down:
+	docker compose -f docker-compose.prod.yml down
 
 lock:
 	cd $(BACKEND) && uv lock

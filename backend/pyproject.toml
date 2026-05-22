@@ -28,15 +28,16 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "integration: tests requiring live PostgreSQL and Redis (docker compose up)",
+]
 testpaths = ["tests"]
 pythonpath = ["."]
-markers = [
-    "integration: tests requiring live Postgres/Redis",
-]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+extend-exclude = ["app/ml_inference/notebooks"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]

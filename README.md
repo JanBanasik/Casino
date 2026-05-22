@@ -213,3 +213,55 @@ Logika działania:
   - Wysłanie powiadomienia WebSocket ("Nie martw się, to tylko zła passa!").
   - Przyznanie nagrody pocieszenia (dodatkowe żetony w PostgreSQL).
 - Nice to Have: Dynamiczne obniżenie poziomu trudności botów przy stole, zastępując wytrenowanego agenta modelem z wyższym współczynnikiem losowości.
+
+## 6. Uruchomienie (dev i produkcja)
+
+### Wymagania
+
+- Docker + Docker Compose
+- [uv](https://docs.astral.sh/uv/) (Python)
+- Node.js 22+ (frontend dev)
+
+### Lokalnie (development)
+
+```bash
+# 1. Infrastruktura (Postgres :15432, Redis :16379)
+make docker-up
+
+# 2. Backend
+cp backend/.env.example backend/.env   # ustaw JWT_SECRET_KEY
+make install
+make migrate
+make dev                               # API http://localhost:8000
+
+# 3. Frontend (osobny terminal)
+make frontend-install
+make frontend-dev                      # UI http://localhost:5173
+```
+
+**pgAdmin:** host `localhost`, port `15432`, user/db/password `casino`.
+
+### WebSocket (produkcja-ready)
+
+Token JWT **nie** trafia do URL. Flow:
+
+1. `POST /api/sessions/{id}/ws-ticket` (Bearer JWT) → krótkotrwały ticket (Redis, 120s, jednorazowy)
+2. `ws://host/ws/tables/{table_id}` — bez query string
+3. Pierwsza wiadomość: `{"type":"auth","ticket":"..."}` → `{"type":"auth_ok"}`
+
+### Produkcja (Docker Compose)
+
+```bash
+export JWT_SECRET_KEY=$(openssl rand -hex 32)
+make prod-up    # frontend http://localhost:8080
+make prod-down
+```
+
+Stack: `postgres`, `redis`, `backend`, `frontend` (nginx proxy dla `/api` i `/ws`).
+
+### Testy
+
+```bash
+make lint
+make test
+```
