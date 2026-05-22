@@ -96,12 +96,28 @@ export function useGameSocket(
 
   useEffect(() => () => disconnect(), [disconnect]);
 
-  const newRound = useCallback(
-    (bet: number) => {
+  const sit = useCallback(
+    (seatIndex: number) => {
       if (!sessionId || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+      setError(null);
       wsRef.current.send(
         JSON.stringify({
-          type: "new_round",
+          type: "sit",
+          session_id: sessionId,
+          seat_index: seatIndex,
+        }),
+      );
+    },
+    [sessionId],
+  );
+
+  const placeBet = useCallback(
+    (bet: number) => {
+      if (!sessionId || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+      setError(null);
+      wsRef.current.send(
+        JSON.stringify({
+          type: "place_bet",
           session_id: sessionId,
           bet,
           solo,
@@ -139,7 +155,8 @@ export function useGameSocket(
     clearRetentionAlert: () => setRetentionAlert(null),
     connect,
     disconnect,
-    newRound,
+    sit,
+    placeBet,
     hit,
     stand,
   };

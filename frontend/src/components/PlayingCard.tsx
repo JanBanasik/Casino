@@ -1,8 +1,12 @@
+import type { CSSProperties } from "react";
+
 interface PlayingCardProps {
   card: string;
   hidden?: boolean;
   dealing?: boolean;
+  revealing?: boolean;
   compact?: boolean;
+  dealFrom?: { x: number; y: number };
 }
 
 function cardLabel(card: string): { rank: string; suit: string; red: boolean } {
@@ -16,23 +20,42 @@ function cardLabel(card: string): { rank: string; suit: string; red: boolean } {
   };
 }
 
-export default function PlayingCard({ card, hidden, dealing, compact }: PlayingCardProps) {
+export default function PlayingCard({
+  card,
+  hidden,
+  dealing,
+  revealing,
+  compact,
+  dealFrom,
+}: PlayingCardProps) {
   const cls = [
     "playing-card",
     compact ? "playing-card--compact" : "",
     dealing ? "playing-card--dealing" : "",
+    revealing ? "playing-card--reveal" : "",
     hidden ? "playing-card--back" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
+  const style: CSSProperties | undefined =
+    dealing && dealFrom
+      ? {
+          ["--from-x" as string]: `${dealFrom.x}px`,
+          ["--from-y" as string]: `${dealFrom.y}px`,
+        }
+      : undefined;
+
   if (hidden) {
-    return <div className={cls} aria-hidden />;
+    return <div className={cls} style={style} aria-hidden />;
   }
 
   const { rank, suit, red } = cardLabel(card);
   return (
-    <div className={`${cls} ${red ? "playing-card--red" : "playing-card--black"}`}>
+    <div
+      className={`${cls} ${red ? "playing-card--red" : "playing-card--black"}`}
+      style={style}
+    >
       <div className="playing-card-corner playing-card-corner--tl">
         <span className="playing-card-rank">{rank}</span>
         <span className="playing-card-suit">{suit}</span>

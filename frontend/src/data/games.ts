@@ -152,19 +152,39 @@ export function avatarColor(key: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-/** Seat positions on ellipse: 7 slots, index 3 = bottom center (human) */
+/** Seven seats along the bottom arc; index 3 = center (typical human seat). */
 export const SEAT_COUNT = 7;
 export const HUMAN_SEAT_SLOT = 3;
 
-export function seatPosition(index: number): { x: number; y: number; rotate: number } {
-  const count = SEAT_COUNT;
-  const angle = (index / count) * 360 - 90;
-  const rad = (angle * Math.PI) / 180;
-  const rx = 42;
-  const ry = 38;
+const SEAT_LAYOUT: { x: number; y: number }[] = [
+  { x: 12, y: 68 },
+  { x: 24, y: 78 },
+  { x: 37, y: 84 },
+  { x: 50, y: 86 },
+  { x: 63, y: 84 },
+  { x: 76, y: 78 },
+  { x: 88, y: 68 },
+];
+
+export function seatPosition(index: number): { x: number; y: number } {
+  return SEAT_LAYOUT[index] ?? SEAT_LAYOUT[3];
+}
+
+/** Krupier / strefa rozdania — karty lecą stąd w stronę miejsc. */
+const DEALER_ORIGIN = { x: 50, y: 24 };
+
+/** Offset animacji: karta startuje przy krupierze, jedzie na miejsce. */
+export function dealOffsetFromDealer(slotIndex: number, compact = false): { x: number; y: number } {
+  const pos = seatPosition(slotIndex);
+  const dx = DEALER_ORIGIN.x - pos.x;
+  const dy = DEALER_ORIGIN.y - pos.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const scale = compact ? 36 : 56;
   return {
-    x: 50 + rx * Math.cos(rad),
-    y: 50 + ry * Math.sin(rad),
-    rotate: angle + 90,
+    x: (dx / len) * scale,
+    y: (dy / len) * scale,
   };
 }
+
+/** Karty krupiera — krótki ruch z góry (talia przy krupierze). */
+export const DEALER_DEAL_OFFSET = { x: 0, y: -32 };

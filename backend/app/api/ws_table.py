@@ -62,9 +62,13 @@ async def _authenticate_ws(websocket: WebSocket, table_id: str) -> UUID | None:
 
 
 async def _emit_seat_actions(websocket: WebSocket, events: list[dict], public: dict) -> None:
+    bot_delay = 0.35
     for ev in events:
         await websocket.send_json({"type": "seat_action", "payload": ev})
-        await asyncio.sleep(0.35)
+        if ev.get("action") != "HIT" or ev.get("seat_index") != public.get("human_seat_index"):
+            await asyncio.sleep(bot_delay)
+        else:
+            await asyncio.sleep(0.08)
     await websocket.send_json({"type": "state", "payload": public})
 
 
@@ -76,6 +80,12 @@ async def table_ws(websocket: WebSocket, table_id: str) -> None:
         return
 
     redis = get_redis()
+
+    if db_session.async_session_factory is not None:
+        async with db_session.async_session_factory() as db:
+            svc = GameRoundService(db, redis)
+            snap = await svc.table_snapshot(user_id, table_id)
+            await websocket.send_json({"type": "state", "payload": snap})
 
     while True:
         try:
@@ -97,12 +107,17 @@ async def table_ws(websocket: WebSocket, table_id: str) -> None:
             svc = GameRoundService(db, redis)
             try:
                 match mtype:
-                    case "new_round":
+                    case "sit":
+                        sid = UUID(str(msg["session_id"]))
+                        seat_index = int(msg.get("seat_index", 0))
+                        public = await svc.sit_at_table(user_id, sid, table_id, seat_index)
+                        await websocket.send_json({"type": "state", "payload": public})
+                    case "place_bet" | "new_round":
                         sid = UUID(str(msg["session_id"]))
                         bet = float(msg.get("bet", 10))
                         solo = bool(msg.get("solo", False))
                         bot_count = int(msg.get("bot_count", 0))
-                        _, public, seat_events = await svc.new_round(
+                        _, public, seat_events = await svc.place_bet(
                             user_id,
                             sid,
                             table_id,

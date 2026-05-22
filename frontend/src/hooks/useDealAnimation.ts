@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TableStatePayload } from "../types/api";
 
-const DEAL_STAGGER_MS = 120;
+const DEAL_STAGGER_MS = 100;
+const REVEAL_MS = 400;
+const DEAL_MS = 320;
 
 interface DealItem {
   key: string;
@@ -24,9 +26,34 @@ function collectKeys(state: TableStatePayload | null, hideDealerHole: boolean): 
   return keys;
 }
 
+function isHoleReveal(prevKeys: Set<string>, added: string[]): string[] {
+  const reveals: string[] = [];
+  for (const key of added) {
+    const match = /^dealer-(\d+)$/.exec(key);
+    if (!match) continue;
+    const idx = match[1];
+    if (prevKeys.has(`dealer-hidden-${idx}`)) {
+      reveals.push(key);
+    }
+  }
+  return reveals;
+}
+
+/** Dobranie w trakcie rundy — bez animacji przesuwu (tylko pojawia się karta). */
+function isMidRoundHit(prev: TableStatePayload | null, added: string[]): boolean {
+  if (!prev || added.length !== 1) return false;
+  const key = added[0];
+  return (
+    key.startsWith("seat-") &&
+    prev.phase === "player_turn" &&
+    prev.table_phase === "playing"
+  );
+}
+
 export function useDealAnimation(tableState: TableStatePayload | null) {
   const prevRef = useRef<TableStatePayload | null>(null);
   const [dealingCards, setDealingCards] = useState<Set<string>>(new Set());
+  const [revealingCards, setRevealingCards] = useState<Set<string>>(new Set());
   const [isDealing, setIsDealing] = useState(false);
 
   const hideDealerHole = tableState?.phase === "player_turn";
@@ -35,12 +62,14 @@ export function useDealAnimation(tableState: TableStatePayload | null) {
     if (!tableState) {
       prevRef.current = null;
       setDealingCards(new Set());
+      setRevealingCards(new Set());
       setIsDealing(false);
       return;
     }
 
     const prev = prevRef.current;
-    const prevKeys = new Set(collectKeys(prev, prev?.phase === "player_turn"));
+    const prevHideHole = prev?.phase === "player_turn";
+    const prevKeys = new Set(collectKeys(prev, prevHideHole));
     const newKeys = collectKeys(tableState, hideDealerHole);
     const added = newKeys.filter((k) => !prevKeys.has(k));
 
@@ -49,7 +78,28 @@ export function useDealAnimation(tableState: TableStatePayload | null) {
       return;
     }
 
-    const items: DealItem[] = added.map((key, i) => ({
+    if (isMidRoundHit(prev, added)) {
+      prevRef.current = tableState;
+      return;
+    }
+
+    const reveals = isHoleReveal(prevKeys, added);
+    const revealSet = new Set(reveals);
+    const toDeal = added.filter((k) => !revealSet.has(k));
+
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    if (reveals.length > 0) {
+      setRevealingCards(revealSet);
+      timers.push(setTimeout(() => setRevealingCards(new Set()), REVEAL_MS));
+    }
+
+    if (toDeal.length === 0) {
+      prevRef.current = tableState;
+      return () => timers.forEach(clearTimeout);
+    }
+
+    const items: DealItem[] = toDeal.map((key, i) => ({
       key,
       delay: i * DEAL_STAGGER_MS,
     }));
@@ -58,7 +108,6 @@ export function useDealAnimation(tableState: TableStatePayload | null) {
     const active = new Set<string>();
     setDealingCards(active);
 
-    const timers: ReturnType<typeof setTimeout>[] = [];
     items.forEach(({ key, delay }) => {
       timers.push(
         setTimeout(() => {
@@ -68,11 +117,12 @@ export function useDealAnimation(tableState: TableStatePayload | null) {
       );
     });
 
+    const totalMs = items.length * DEAL_STAGGER_MS + DEAL_MS;
     timers.push(
       setTimeout(() => {
         setIsDealing(false);
         setDealingCards(new Set());
-      }, items.length * DEAL_STAGGER_MS + 300),
+      }, totalMs),
     );
 
     prevRef.current = tableState;
@@ -83,8 +133,9 @@ export function useDealAnimation(tableState: TableStatePayload | null) {
   const resetDeal = useCallback(() => {
     prevRef.current = null;
     setDealingCards(new Set());
+    setRevealingCards(new Set());
     setIsDealing(false);
   }, []);
 
-  return { dealingCards, isDealing, resetDeal };
+  return { dealingCards, revealingCards, isDealing, resetDeal };
 }

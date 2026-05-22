@@ -12,6 +12,7 @@ from app.db.models import GameSession, GameType, Round, RoundResult, Transaction
 from app.engine.blackjack import BlackjackAction, BlackjackPhase
 from app.engine.multi_seat import (
     MultiSeatBlackjackState,
+    SeatStatus,
     advance_bot_turns,
     apply_seat_action,
     finish_dealer_and_settle,
@@ -19,6 +20,7 @@ from app.engine.multi_seat import (
     new_multi_round,
 )
 from app.ml_inference.policies import BasicStrategyPolicy
+from app.schemas.table_lobby import TableLobby, load_table_lobby, save_table_lobby
 from app.schemas.table_state import RedisTableState, load_table_state, save_table_state
 from app.services.retention import RetentionService
 from app.services.wallet import WalletService
@@ -43,7 +45,89 @@ class GameRoundService:
         row = res.scalar_one_or_none()
         return row or "Gracz"
 
-    async def new_round(
+    def _lobby_seat_index(self, lobby: TableLobby, user_id: UUID) -> int | None:
+        for i, occ in enumerate(lobby.seats):
+            if occ is not None and occ.user_id == user_id:
+                return i
+        return None
+
+    async def table_snapshot(self, user_id: UUID, table_id: str) -> dict:
+        lobby = await load_table_lobby(self.redis, table_id)
+        loaded = await load_table_state(self.redis, table_id)
+        my_seat = self._lobby_seat_index(lobby, user_id)
+
+        if loaded is not None:
+            st = loaded.to_multi()
+            public = st.to_public_dict(table_phase="playing")
+            public["lobby_seats"] = lobby.to_public()
+            public["my_seat_index"] = my_seat
+            public["round_in_progress"] = st.phase != BlackjackPhase.finished
+            public["waiting_for_round"] = (
+                my_seat is not None
+                and loaded.user_id != user_id
+                and st.phase != BlackjackPhase.finished
+            )
+            return public
+
+        return {
+            "table_phase": "idle",
+            "phase": "idle",
+            "player_hand": [],
+            "dealer_hand": [],
+            "dealer_hidden_count": 0,
+            "bet": 0,
+            "message": None,
+            "active_seat_index": None,
+            "human_seat_index": my_seat if my_seat is not None else 3,
+            "seats": [],
+            "lobby_seats": lobby.to_public(),
+            "my_seat_index": my_seat,
+            "round_in_progress": False,
+            "waiting_for_round": False,
+        }
+
+    async def sit_at_table(
+        self,
+        user_id: UUID,
+        game_session_id: UUID,
+        table_id: str,
+        seat_index: int,
+    ) -> dict:
+        if seat_index < 0 or seat_index > 6:
+            raise ValueError("invalid_seat")
+
+        gs = await self._get_session_owned(game_session_id, user_id)
+        if gs is None:
+            raise ValueError("session_not_found")
+
+        lobby = await load_table_lobby(self.redis, table_id)
+        if lobby.seats[seat_index] is not None and lobby.seats[seat_index].user_id != user_id:
+            raise ValueError("seat_taken")
+
+        for i, occ in enumerate(lobby.seats):
+            if occ is not None and occ.user_id == user_id and i != seat_index:
+                lobby.seats[i] = None
+
+        username = await self._username(user_id)
+        from app.schemas.table_lobby import LobbySeatOccupant
+
+        lobby.seats[seat_index] = LobbySeatOccupant(
+            user_id=user_id,
+            session_id=game_session_id,
+            display_name=username,
+            avatar_key="you",
+        )
+        await save_table_lobby(self.redis, table_id, lobby, settings.table_state_ttl_seconds)
+
+        loaded = await load_table_state(self.redis, table_id)
+        waiting = loaded is not None and loaded.phase != BlackjackPhase.finished
+        snap = await self.table_snapshot(user_id, table_id)
+        if waiting:
+            snap["waiting_for_round"] = True
+            snap["message"] = "wait_round_end"
+        return snap
+
+    async def place_bet(
         self,
         user_id: UUID,
         game_session_id: UUID,
@@ -53,11 +137,46 @@ class GameRoundService:
         solo: bool = False,
         bot_count: int = 0,
     ) -> tuple[RedisTableState | None, dict, list[dict]]:
+        """Start a round when table is idle; requires seated player."""
+        lobby = await load_table_lobby(self.redis, table_id)
+        seat_idx = self._lobby_seat_index(lobby, user_id)
+        if seat_idx is None:
+            raise ValueError("not_seated")
+
+        existing = await load_table_state(self.redis, table_id)
+        if existing is not None and existing.phase != BlackjackPhase.finished:
+            raise ValueError("round_in_progress")
+
+        return await self.new_round(
+            user_id,
+            game_session_id,
+            table_id,
+            bet,
+            solo=solo,
+            bot_count=bot_count,
+            human_seat_index=seat_idx,
+        )
+
+    async def new_round(
+        self,
+        user_id: UUID,
+        game_session_id: UUID,
+        table_id: str,
+        bet: float,
+        *,
+        solo: bool = False,
+        bot_count: int = 0,
+        human_seat_index: int = 3,
+    ) -> tuple[RedisTableState | None, dict, list[dict]]:
         gs = await self._get_session_owned(game_session_id, user_id)
         if gs is None:
             raise ValueError("session_not_found")
         if gs.game_type != GameType.blackjack:
             raise ValueError("unsupported_game")
+
+        existing = await load_table_state(self.redis, table_id)
+        if existing is not None and existing.phase != BlackjackPhase.finished:
+            raise ValueError("round_in_progress")
 
         if solo:
             bot_count = 0
@@ -77,6 +196,7 @@ class GameRoundService:
             bet=bet,
             human_name=username,
             human_id=str(user_id),
+            human_seat_index=human_seat_index,
             bot_count=bot_count,
             rng=random.Random(),
         )
@@ -90,7 +210,9 @@ class GameRoundService:
             finish_dealer_and_settle(st)
             bonus = await self._finalize_round_db(st, game_session_id, user_id, table_id, wallet_svc)
             await self.session.commit()
-            public = st.to_public_dict()
+            public = st.to_public_dict(table_phase="idle")
+            public["lobby_seats"] = (await load_table_lobby(self.redis, table_id)).to_public()
+            public["my_seat_index"] = human_seat_index
             if bonus:
                 public["retention"] = bonus
             return None, public, seat_events
@@ -98,7 +220,11 @@ class GameRoundService:
         redis_st = RedisTableState.from_multi(table_id, game_session_id, user_id, st, bot_count)
         await save_table_state(self.redis, redis_st, settings.table_state_ttl_seconds)
         await self.session.commit()
-        return redis_st, st.to_public_dict(), seat_events
+        public = st.to_public_dict(table_phase="playing")
+        public["lobby_seats"] = (await load_table_lobby(self.redis, table_id)).to_public()
+        public["my_seat_index"] = human_seat_index
+        public["round_in_progress"] = True
+        return redis_st, public, seat_events
 
     async def apply_player_action(
         self,
@@ -109,19 +235,20 @@ class GameRoundService:
         loaded = await load_table_state(self.redis, table_id)
         if loaded is None:
             raise ValueError("no_active_round")
-        if loaded.user_id != user_id:
-            raise ValueError("forbidden")
 
         st = loaded.to_multi()
         seat_events: list[dict] = []
 
         if st.phase == BlackjackPhase.finished:
-            return st.to_public_dict(), None, seat_events
+            return st.to_public_dict(table_phase="idle"), None, seat_events
 
         if st.phase == BlackjackPhase.player_turn:
             human_idx = st.human_seat_index
             if st.active_seat_index != human_idx:
                 raise ValueError("not_your_turn")
+            human_seat = st.seats[human_idx]
+            if human_seat.occupant_id != str(user_id):
+                raise ValueError("forbidden")
             apply_seat_action(st, human_idx, action)
             seat_events.append({
                 "seat_index": human_idx,
@@ -146,7 +273,11 @@ class GameRoundService:
             )
             await self.redis.delete(f"table:{table_id}:state")
             await self.session.commit()
-            out = st.to_public_dict()
+            lobby = await load_table_lobby(self.redis, table_id)
+            out = st.to_public_dict(table_phase="idle")
+            out["lobby_seats"] = lobby.to_public()
+            out["my_seat_index"] = self._lobby_seat_index(lobby, user_id)
+            out["round_in_progress"] = False
             if bonus_meta:
                 out["retention"] = bonus_meta
             return out, bonus_meta, seat_events
@@ -159,7 +290,12 @@ class GameRoundService:
             settings.table_state_ttl_seconds,
         )
         await self.session.commit()
-        return st.to_public_dict(), None, seat_events
+        out = st.to_public_dict(table_phase="playing")
+        out["lobby_seats"] = (await load_table_lobby(self.redis, table_id)).to_public()
+        out["my_seat_index"] = self._lobby_seat_index(
+            await load_table_lobby(self.redis, table_id), user_id
+        )
+        return out, None, seat_events
 
     async def _finalize_round_db(
         self,
@@ -180,7 +316,7 @@ class GameRoundService:
         bot_actions = [
             {"seat": s.display_name, "result": s.result, "hand": s.hand}
             for s in st.seats
-            if not s.is_human
+            if not s.is_human and s.status != SeatStatus.empty
         ]
         self.session.add(
             Round(

@@ -10,7 +10,15 @@ export interface SeatStatePayload {
   payout?: number;
 }
 
+export interface LobbySeatPayload {
+  seat_index: number;
+  display_name: string;
+  avatar_key: string;
+  is_human: boolean;
+}
+
 export interface TableStatePayload {
+  table_phase?: string;
   phase: string;
   player_hand: string[];
   dealer_hand: string[];
@@ -19,6 +27,10 @@ export interface TableStatePayload {
   message?: string | null;
   active_seat_index?: number | null;
   human_seat_index?: number;
+  my_seat_index?: number | null;
+  round_in_progress?: boolean;
+  waiting_for_round?: boolean;
+  lobby_seats?: (LobbySeatPayload | null)[];
   seats?: SeatStatePayload[];
   retention?: {
     bad_beat_bonus?: boolean;

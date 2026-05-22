@@ -27,6 +27,7 @@ BOT_PROFILES = [
 
 
 class SeatStatus(str, enum.Enum):
+    empty = "empty"
     waiting = "waiting"
     acting = "acting"
     stood = "stood"
@@ -61,7 +62,7 @@ class MultiSeatBlackjackState:
     def human_seat(self) -> SeatState:
         return self.seats[self.human_seat_index]
 
-    def to_public_dict(self) -> dict:
+    def to_public_dict(self, *, table_phase: str = "playing") -> dict:
         hide_dealer = self.phase == BlackjackPhase.player_turn
         dealer_visible = (
             list(self.dealer_hand)
@@ -70,6 +71,7 @@ class MultiSeatBlackjackState:
         )
         human = self.human_seat()
         return {
+            "table_phase": table_phase,
             "phase": self.phase.value,
             "player_hand": list(human.hand),
             "dealer_hand": dealer_visible,
@@ -91,6 +93,7 @@ class MultiSeatBlackjackState:
                     "payout": s.payout,
                 }
                 for s in self.seats
+                if s.status != SeatStatus.empty
             ],
         }
 
@@ -115,6 +118,8 @@ def _check_seat_blackjack(seat: SeatState, dealer_hand: list[str]) -> bool:
 def _next_active_seat(state: MultiSeatBlackjackState, start: int) -> int | None:
     for i in range(start, len(state.seats)):
         s = state.seats[i]
+        if s.status == SeatStatus.empty:
+            continue
         if s.status in (SeatStatus.acting, SeatStatus.waiting):
             return i
     return None
@@ -124,15 +129,18 @@ def build_seats(
     *,
     human_name: str,
     human_id: str,
+    human_seat_index: int,
     bot_count: int,
     bet: float,
 ) -> list[SeatState]:
-    total = max(1, 1 + bot_count)
-    human_index = min(3, total - 1)
+    """Seven table slots; human at chosen index, bots fill other slots up to bot_count."""
+    human_seat_index = max(0, min(6, human_seat_index))
+    bot_count = max(0, min(bot_count, 6))
     seats: list[SeatState] = []
     bot_idx = 0
-    for i in range(total):
-        if i == human_index:
+    bots_left = bot_count
+    for i in range(7):
+        if i == human_seat_index:
             seats.append(
                 SeatState(
                     seat_index=i,
@@ -144,9 +152,10 @@ def build_seats(
                     status=SeatStatus.waiting,
                 )
             )
-        else:
+        elif bots_left > 0:
             profile = BOT_PROFILES[bot_idx % len(BOT_PROFILES)]
             bot_idx += 1
+            bots_left -= 1
             seats.append(
                 SeatState(
                     seat_index=i,
@@ -158,6 +167,18 @@ def build_seats(
                     status=SeatStatus.waiting,
                 )
             )
+        else:
+            seats.append(
+                SeatState(
+                    seat_index=i,
+                    display_name="",
+                    avatar_key="",
+                    is_human=False,
+                    occupant_id="",
+                    bet=0.0,
+                    status=SeatStatus.empty,
+                )
+            )
     return seats
 
 
@@ -166,18 +187,27 @@ def new_multi_round(
     bet: float,
     human_name: str,
     human_id: str,
+    human_seat_index: int = 3,
     bot_count: int = 0,
     rng: random.Random | None = None,
 ) -> MultiSeatBlackjackState:
     rng = rng or random.Random()
     bot_count = max(0, min(bot_count, len(BOT_PROFILES)))
-    seats = build_seats(human_name=human_name, human_id=human_id, bot_count=bot_count, bet=bet)
-    human_index = next(i for i, s in enumerate(seats) if s.is_human)
+    seats = build_seats(
+        human_name=human_name,
+        human_id=human_id,
+        human_seat_index=human_seat_index,
+        bot_count=bot_count,
+        bet=bet,
+    )
+    human_index = human_seat_index
 
     deck = _fresh_deck(rng)
     dealer = [deck.pop(), deck.pop()]
 
     for seat in seats:
+        if seat.status == SeatStatus.empty:
+            continue
         seat.hand = [deck.pop(), deck.pop()]
         seat.status = SeatStatus.acting
         if is_bust(seat.hand):
@@ -195,7 +225,8 @@ def new_multi_round(
         human_seat_index=human_index,
     )
 
-    if all(s.status in (SeatStatus.finished, SeatStatus.bust) for s in seats):
+    playing = [s for s in seats if s.status != SeatStatus.empty]
+    if all(s.status in (SeatStatus.finished, SeatStatus.bust) for s in playing):
         state.phase = BlackjackPhase.finished
         state.message = "all_natural"
         return state
@@ -225,6 +256,9 @@ def apply_seat_action(
         if is_bust(seat.hand):
             seat.status = SeatStatus.bust
             seat.result = "loss"
+        else:
+            state.active_seat_index = seat_index
+            return state
     elif action == BlackjackAction.stand:
         seat.status = SeatStatus.stood
     else:
@@ -300,6 +334,8 @@ def finish_dealer_and_settle(state: MultiSeatBlackjackState) -> MultiSeatBlackja
             state.message = "dealer_bust"
 
     for seat in state.seats:
+        if seat.status == SeatStatus.empty:
+            continue
         if seat.status == SeatStatus.bust:
             seat.result = seat.result or "loss"
             seat.payout = 0.0
