@@ -82,3 +82,32 @@ export function wsBaseUrl(): string {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${window.location.host}`;
 }
+
+export function createPokerSession() {
+  return apiFetch<SessionResponse>("/api/sessions", {
+    method: "POST",
+    body: JSON.stringify({ game_type: "poker" }),
+  }, true);
+}
+
+export function createRouletteSession() {
+  return apiFetch<SessionResponse>("/api/sessions", {
+    method: "POST",
+    body: JSON.stringify({ game_type: "roulette" }),
+  }, true);
+}
+
+export interface RouletteBetRequest {
+  bet_type: string;
+  amount: number;
+  number?: number;
+  numbers?: number[];
+  choice?: string;
+}
+
+export function rouletteSpin(session_id: string, bets: RouletteBetRequest[]) {
+  return apiFetch<import('../types/api').RouletteSpinResult>("/api/roulette/spin", {
+    method: "POST",
+    body: JSON.stringify({ session_id, bets }),
+  }, true);
+}

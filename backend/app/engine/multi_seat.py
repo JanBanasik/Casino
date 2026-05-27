@@ -370,6 +370,40 @@ def advance_bot_turns(
     return actions
 
 
+def advance_one_bot(
+    state: MultiSeatBlackjackState,
+    policy,
+) -> tuple[int, BlackjackAction] | None:
+    """Advance exactly ONE bot seat. Returns (seat_idx, action) or None if it's human's turn / done."""
+    if state.phase != BlackjackPhase.player_turn or state.active_seat_index is None:
+        return None
+    seat = state.seats[state.active_seat_index]
+    if seat.is_human:
+        return None
+    action = policy.choose_action(seat.hand)
+    idx = state.active_seat_index
+    apply_seat_action(state, idx, action)
+    return idx, action
+
+
+def dealer_draw_one(state: MultiSeatBlackjackState) -> bool:
+    """Draw one card for the dealer (during dealer_turn). Returns True when dealer is done."""
+    from app.engine.blackjack import hand_value as hv
+    if state.phase != BlackjackPhase.dealer_turn:
+        return True
+    if not state.deck:
+        return True
+    dv, soft = hv(state.dealer_hand)
+    # Dealer hits on soft 17 or less, stands on 17+ (hard or soft)
+    if dv < 17 or (soft and dv == 17):
+        state.dealer_hand.append(state.deck.pop())
+        dv2, _ = hv(state.dealer_hand)
+        if dv2 >= 17 or is_bust(state.dealer_hand):
+            return True  # dealer done after this card
+        return False
+    return True  # dealer stands
+
+
 def human_settle_result(state: MultiSeatBlackjackState) -> tuple[str, float]:
     human = state.human_seat()
     if human.result == "win":

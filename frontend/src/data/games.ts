@@ -37,21 +37,23 @@ export const GAMES: GameInfo[] = [
     id: "poker",
     name: "Texas Hold'em",
     category: "cards",
-    description: "Poker wieloosobowy — wkrótce.",
+    description: "Poker wieloosobowy — Texas Hold'em z botami przy stole.",
     minBet: 20,
-    playersOnline: 0,
+    playersOnline: 45,
     imageGradient: "linear-gradient(135deg, #1a1a3e 0%, #2d2d6b 50%, #12122a 100%)",
-    available: false,
+    available: true,
+    route: "/stoły#poker",
   },
   {
     id: "roulette",
     name: "Ruletka",
-    category: "coming",
-    description: "Europejska ruletka na żywo — wkrótce.",
+    category: "live",
+    description: "Europejska ruletka — postaw zakład i kręć kołem.",
     minBet: 5,
-    playersOnline: 0,
+    playersOnline: 72,
     imageGradient: "linear-gradient(135deg, #3e0a0a 0%, #6b1a1a 50%, #2a0808 100%)",
-    available: false,
+    available: true,
+    route: "/roulette",
   },
 ];
 
@@ -170,21 +172,24 @@ export function seatPosition(index: number): { x: number; y: number } {
   return SEAT_LAYOUT[index] ?? SEAT_LAYOUT[3];
 }
 
-/** Krupier / strefa rozdania — karty lecą stąd w stronę miejsc. */
-const DEALER_ORIGIN = { x: 50, y: 24 };
+/**
+ * Shoe (talia) — widoczna w górnym-prawym rogu stołu.
+ * Animacje kart lecą STĄD do każdego miejsca.
+ */
+const DEALER_ORIGIN = { x: 91, y: 8 };
 
-/** Offset animacji: karta startuje przy krupierze, jedzie na miejsce. */
+/** Offset animacji: karta startuje przy talii (góra-prawo), jedzie na miejsce. */
 export function dealOffsetFromDealer(slotIndex: number, compact = false): { x: number; y: number } {
   const pos = seatPosition(slotIndex);
   const dx = DEALER_ORIGIN.x - pos.x;
   const dy = DEALER_ORIGIN.y - pos.y;
   const len = Math.hypot(dx, dy) || 1;
-  const scale = compact ? 36 : 56;
+  const scale = compact ? 55 : 110;
   return {
     x: (dx / len) * scale,
     y: (dy / len) * scale,
   };
 }
 
-/** Karty krupiera — krótki ruch z góry (talia przy krupierze). */
-export const DEALER_DEAL_OFFSET = { x: 0, y: -32 };
+/** Karty krupiera — lecą z talii po prawej stronie */
+export const DEALER_DEAL_OFFSET = { x: 160, y: -40 };

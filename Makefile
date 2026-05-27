@@ -1,4 +1,4 @@
-.PHONY: install lock test migrate revision dev docker-up docker-down lint frontend-install frontend-dev frontend-build prod-up prod-down
+.PHONY: install lock test migrate revision dev docker-up docker-down lint frontend-install frontend-dev frontend-build prod-up prod-down dev-full
 
 BACKEND := backend
 FRONTEND := frontend
@@ -41,6 +41,10 @@ docker-up:
 
 docker-down:
 	docker compose down
+
+## Uruchamia WSZYSTKO jedną komendą: docker (db+redis) + migracje + backend + frontend
+dev-full:
+	./start-dev.sh
 
 lint:
 	cd $(BACKEND) && uv run ruff check app tests

@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { LobbySeatPayload, SeatStatePayload, TableStatePayload } from "../types/api";
 import { DEALER_DEAL_OFFSET, SEAT_COUNT, seatPosition } from "../data/games";
+import type { AmbientSeat } from "../hooks/useAmbientTable";
 import PlayingCard from "./PlayingCard";
 import SeatAvatar from "./SeatAvatar";
 
@@ -12,9 +13,14 @@ interface TableLayoutProps {
   activeSeatIndex: number | null | undefined;
   dealingCards: Set<string>;
   revealingCards: Set<string>;
+  pendingCards: Set<string>;
   hideDealerHole: boolean;
   canPickSeat: boolean;
   onPickSeat: (slot: number) => void;
+  // Ambient table simulation
+  ambientSeats?: AmbientSeat[];
+  ambientDealerHand?: string[];
+  isAmbientDealing?: boolean;
 }
 
 export default function TableLayout({
@@ -25,16 +31,27 @@ export default function TableLayout({
   activeSeatIndex,
   dealingCards,
   revealingCards,
+  pendingCards,
   hideDealerHole,
   canPickSeat,
   onPickSeat,
+  ambientSeats = [],
+  ambientDealerHand = [],
+  isAmbientDealing = false,
 }: TableLayoutProps) {
   const dealerHand = tableState?.dealer_hand ?? [];
   const hiddenCount = hideDealerHole ? (tableState?.dealer_hidden_count ?? 0) : 0;
   const roundPlaying = tableState?.table_phase === "playing" || tableState?.round_in_progress;
 
+  // Use ambient dealer hand when idle and no real game
+  const displayDealerHand = roundPlaying ? dealerHand : (ambientDealerHand.length > 0 ? ambientDealerHand : dealerHand);
+
   const gameSeatByIndex = new Map<number, SeatStatePayload>();
   seats.forEach((s) => gameSeatByIndex.set(s.seat_index, s));
+
+  // Map ambient seats by index for easy lookup
+  const ambientSeatByIndex = new Map<number, AmbientSeat>();
+  ambientSeats.forEach((s) => ambientSeatByIndex.set(s.seatIndex, s));
 
   return (
     <div className="table-layout">
@@ -49,11 +66,12 @@ export default function TableLayout({
         <div className="dealer-zone">
           <span className="zone-label">Krupier</span>
           <div className="hand-row hand-row--dealer">
-            {dealerHand.map((c, i) => (
+            {displayDealerHand.map((c, i) => (
               <PlayingCard
                 key={`d-${c}-${i}`}
                 card={c}
-                dealing={dealingCards.has(`dealer-${i}`)}
+                pending={roundPlaying ? pendingCards.has(`dealer-${i}`) : false}
+                dealing={!roundPlaying && isAmbientDealing ? true : dealingCards.has(`dealer-${i}`)}
                 revealing={revealingCards.has(`dealer-${i}`)}
                 dealFrom={DEALER_DEAL_OFFSET}
               />
@@ -63,11 +81,12 @@ export default function TableLayout({
                 key={`dh-${i}`}
                 card=""
                 hidden
+                pending={pendingCards.has(`dealer-hidden-${i}`)}
                 dealing={dealingCards.has(`dealer-hidden-${i}`)}
                 dealFrom={DEALER_DEAL_OFFSET}
               />
             ))}
-            {!roundPlaying && dealerHand.length === 0 && (
+            {!roundPlaying && displayDealerHand.length === 0 && (
               <span className="placeholder-text placeholder-text--dealer">Stół gotowy</span>
             )}
           </div>
@@ -83,7 +102,24 @@ export default function TableLayout({
             };
             const lobby = lobbySeats[slot] ?? null;
             const gameSeat = gameSeatByIndex.get(slot);
+            const ambientSeat = ambientSeatByIndex.get(slot);
             const occupant = gameSeat ?? lobby;
+
+            // Show ambient seat when no real occupant and table is idle
+            if (!occupant && ambientSeat && !roundPlaying) {
+              return (
+                <SeatAvatar
+                  key={`ambient-${slot}`}
+                  seatIndex={slot}
+                  displayName={ambientSeat.displayName}
+                  avatarKey={ambientSeat.avatarKey}
+                  isHuman={false}
+                  hand={ambientSeat.hand}
+                  style={style}
+                  compact
+                />
+              );
+            }
 
             if (!occupant) {
               return (
@@ -102,6 +138,13 @@ export default function TableLayout({
             }
 
             const isHuman = occupant.is_human && slot === mySeatIndex;
+            const isActiveSeat = roundPlaying && activeSeatIndex === slot;
+            // Dim others when a specific seat is active (not during deal phase when activeSeatIndex is null)
+            const isInactiveSeat =
+              roundPlaying &&
+              activeSeatIndex !== null &&
+              activeSeatIndex !== undefined &&
+              !isActiveSeat;
             return (
               <SeatAvatar
                 key={`seat-${slot}-${occupant.display_name}`}
@@ -109,12 +152,14 @@ export default function TableLayout({
                 displayName={occupant.display_name}
                 avatarKey={occupant.avatar_key}
                 isHuman={isHuman}
-                isActive={roundPlaying && activeSeatIndex === slot}
+                isActive={isActiveSeat}
+                isInactive={isInactiveSeat}
                 hand={gameSeat?.hand ?? []}
                 bet={gameSeat?.bet}
                 result={gameSeat?.result}
                 dealingCards={dealingCards}
                 revealingCards={revealingCards}
+                pendingCards={pendingCards}
                 style={style}
                 compact
               />

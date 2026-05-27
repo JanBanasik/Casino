@@ -10,6 +10,7 @@ interface SeatAvatarProps {
   isHuman: boolean;
   isEmpty?: boolean;
   isActive?: boolean;
+  isInactive?: boolean;   // tura kogoś innego — przyciemniony
   isSelectable?: boolean;
   onSelect?: () => void;
   hand?: string[];
@@ -17,6 +18,7 @@ interface SeatAvatarProps {
   result?: string | null;
   dealingCards?: Set<string>;
   revealingCards?: Set<string>;
+  pendingCards?: Set<string>;
   style?: CSSProperties;
   compact?: boolean;
 }
@@ -28,6 +30,7 @@ export default function SeatAvatar({
   isHuman,
   isEmpty,
   isActive,
+  isInactive,
   isSelectable,
   onSelect,
   hand = [],
@@ -35,6 +38,7 @@ export default function SeatAvatar({
   result,
   dealingCards,
   revealingCards,
+  pendingCards,
   style,
   compact,
 }: SeatAvatarProps) {
@@ -60,7 +64,7 @@ export default function SeatAvatar({
 
   return (
     <div
-      className={`seat-node ${isHuman ? "seat-node--you" : ""} ${isActive ? "seat-node--active" : ""} ${resultClass}`}
+      className={`seat-node ${isHuman ? "seat-node--you" : ""} ${isActive ? "seat-node--active" : ""} ${isInactive ? "seat-node--inactive" : ""} ${resultClass}`}
       style={style}
     >
       <div
@@ -80,6 +84,7 @@ export default function SeatAvatar({
                 key={`${c}-${i}`}
                 card={c}
                 compact={compact}
+                pending={pendingCards?.has(key)}
                 dealing={dealingCards?.has(key)}
                 revealing={revealingCards?.has(key)}
                 dealFrom={dealFrom}

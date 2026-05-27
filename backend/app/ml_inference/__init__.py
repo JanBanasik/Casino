@@ -1,3 +1,3 @@
-from app.ml_inference.policies import DealerPolicy, RandomLegalPolicy
+from app.ml_inference.policies import BasicStrategyPolicy, QLearningPolicy, RandomLegalPolicy, make_default_policy
 
-__all__ = ["DealerPolicy", "RandomLegalPolicy"]
+__all__ = ["BasicStrategyPolicy", "QLearningPolicy", "RandomLegalPolicy", "make_default_policy"]

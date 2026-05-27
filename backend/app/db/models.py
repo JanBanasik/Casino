@@ -24,6 +24,7 @@ class TransactionType(str, enum.Enum):
 class GameType(str, enum.Enum):
     blackjack = "blackjack"
     poker = "poker"
+    roulette = "roulette"
 
 
 class RoundResult(str, enum.Enum):

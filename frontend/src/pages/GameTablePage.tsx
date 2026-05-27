@@ -4,6 +4,7 @@ import TableActionBanner from "../components/TableActionBanner";
 import TableLayout from "../components/TableLayout";
 import { LIVE_TABLES } from "../data/games";
 import { useDealAnimation } from "../hooks/useDealAnimation";
+import { useAmbientTable } from "../hooks/useAmbientTable";
 import { useAuth } from "../hooks/useAuth";
 import { useGameSocket } from "../hooks/useGameSocket";
 import { getWallet } from "../services/api";
@@ -55,7 +56,7 @@ export default function GameTablePage() {
     stand,
   } = useGameSocket(sessionId ?? null, tableId, solo, botCount);
 
-  const { dealingCards, revealingCards, isDealing, resetDeal } = useDealAnimation(tableState);
+  const { pendingCards, dealingCards, revealingCards, isDealing, resetDeal } = useDealAnimation(tableState);
 
   const mySeatIndex = tableState?.my_seat_index ?? null;
   const isSeated = mySeatIndex !== null && mySeatIndex !== undefined;
@@ -77,6 +78,8 @@ export default function GameTablePage() {
     return Array.from({ length: 7 }, () => null);
   }, [tableState]);
 
+  const { ambientSeats, ambientDealerHand, isAmbientDealing } = useAmbientTable(tableIdle, lobbySeats);
+
   const humanSeatIndex = mySeatIndex ?? tableState?.human_seat_index ?? 0;
   const canPlay =
     roundPlaying &&
@@ -92,8 +95,12 @@ export default function GameTablePage() {
     if (sessionId && token) connect();
   }, [sessionId, tableId, token, connect]);
 
+  // Odśwież saldo po każdej zmianie stanu (z małym opóźnieniem by bank DB zdążył)
   useEffect(() => {
-    getWallet().then((w) => setBalance(w.balance)).catch(() => undefined);
+    const t = setTimeout(() => {
+      getWallet().then((w) => setBalance(w.balance)).catch(() => undefined);
+    }, 350);
+    return () => clearTimeout(t);
   }, [tableState]);
 
   function handlePlaceBet() {
@@ -204,12 +211,19 @@ export default function GameTablePage() {
             <span>Status</span>
             <strong>{statusLabel}</strong>
           </div>
+          <Link to="/stoły" className="btn btn-ghost btn-sm leave-table-btn">
+            Opuść stół
+          </Link>
         </div>
       </div>
 
       {retentionAlert && (
-        <div className="toast toast--success container" onClick={clearRetentionAlert}>
-          {retentionAlert}
+        <div className="toast toast--bonus container" onClick={clearRetentionAlert}>
+          <div className="toast-icon">🎁</div>
+          <div>
+            <div className="toast-title">{retentionAlert}</div>
+            <div className="toast-sub">Bonus za pechową serię 3 przegranych — żetony dodane do salda!</div>
+          </div>
         </div>
       )}
 
@@ -220,11 +234,15 @@ export default function GameTablePage() {
           lobbySeats={lobbySeats}
           mySeatIndex={mySeatIndex}
           activeSeatIndex={tableState?.active_seat_index}
+          pendingCards={pendingCards}
           dealingCards={dealingCards}
           revealingCards={revealingCards}
           hideDealerHole={tableState?.phase === "player_turn"}
           canPickSeat={!isSeated && statusLabel === "Stół na żywo"}
           onPickSeat={sit}
+          ambientSeats={ambientSeats}
+          ambientDealerHand={ambientDealerHand}
+          isAmbientDealing={isAmbientDealing}
         />
 
         <TableActionBanner

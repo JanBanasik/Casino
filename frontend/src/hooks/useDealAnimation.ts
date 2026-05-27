@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TableStatePayload } from "../types/api";
 
-const DEAL_STAGGER_MS = 100;
-const REVEAL_MS = 400;
-const DEAL_MS = 320;
+const DEAL_STAGGER_MS = 400;  // ms między każdą kartą
+const REVEAL_MS = 550;
+const DEAL_MS = 650;
 
 interface DealItem {
   key: string;
@@ -39,7 +39,7 @@ function isHoleReveal(prevKeys: Set<string>, added: string[]): string[] {
   return reveals;
 }
 
-/** Dobranie w trakcie rundy — bez animacji przesuwu (tylko pojawia się karta). */
+/** Dobranie w trakcie rundy — bez animacji przesuwu. */
 function isMidRoundHit(prev: TableStatePayload | null, added: string[]): boolean {
   if (!prev || added.length !== 1) return false;
   const key = added[0];
@@ -50,8 +50,37 @@ function isMidRoundHit(prev: TableStatePayload | null, added: string[]): boolean
   );
 }
 
+/**
+ * Round-robin order: seat-0-0, seat-1-0, ..., dealer-0, seat-0-1, seat-1-1, ..., dealer-1
+ */
+function reorderDealKeys(keys: string[]): string[] {
+  const byCardIndex: Map<number, string[]> = new Map();
+  for (const key of keys) {
+    const match = /-(\d+)$/.exec(key);
+    const idx = match ? parseInt(match[1], 10) : 0;
+    if (!byCardIndex.has(idx)) byCardIndex.set(idx, []);
+    byCardIndex.get(idx)!.push(key);
+  }
+  const result: string[] = [];
+  const sortedRounds = Array.from(byCardIndex.keys()).sort((a, b) => a - b);
+  for (const round of sortedRounds) {
+    const roundKeys = byCardIndex.get(round)!;
+    const seatKeys = roundKeys.filter((k) => k.startsWith("seat-")).sort((a, b) => {
+      const ai = parseInt(a.split("-")[1], 10);
+      const bi = parseInt(b.split("-")[1], 10);
+      return ai - bi;
+    });
+    const dealerKeys = roundKeys.filter((k) => k.startsWith("dealer-"));
+    result.push(...seatKeys, ...dealerKeys);
+  }
+  return result;
+}
+
 export function useDealAnimation(tableState: TableStatePayload | null) {
   const prevRef = useRef<TableStatePayload | null>(null);
+  const isFirstLoadRef = useRef(true);
+  // Cards that have been added to state but haven't started animating yet → invisible
+  const [pendingCards, setPendingCards] = useState<Set<string>>(new Set());
   const [dealingCards, setDealingCards] = useState<Set<string>>(new Set());
   const [revealingCards, setRevealingCards] = useState<Set<string>>(new Set());
   const [isDealing, setIsDealing] = useState(false);
@@ -61,9 +90,18 @@ export function useDealAnimation(tableState: TableStatePayload | null) {
   useEffect(() => {
     if (!tableState) {
       prevRef.current = null;
+      isFirstLoadRef.current = true;
+      setPendingCards(new Set());
       setDealingCards(new Set());
       setRevealingCards(new Set());
       setIsDealing(false);
+      return;
+    }
+
+    // Skip animation for the initial WS snapshot (joining mid-round or idle table)
+    if (isFirstLoadRef.current) {
+      isFirstLoadRef.current = false;
+      prevRef.current = tableState;
       return;
     }
 
@@ -99,18 +137,24 @@ export function useDealAnimation(tableState: TableStatePayload | null) {
       return () => timers.forEach(clearTimeout);
     }
 
-    const items: DealItem[] = toDeal.map((key, i) => ({
+    const reordered = reorderDealKeys(toDeal);
+    const items: DealItem[] = reordered.map((key, i) => ({
       key,
       delay: i * DEAL_STAGGER_MS,
     }));
 
+    // Immediately hide ALL new cards (pending) before their deal animation starts
+    const pending = new Set(reordered);
+    setPendingCards(pending);
     setIsDealing(true);
     const active = new Set<string>();
-    setDealingCards(active);
 
     items.forEach(({ key, delay }) => {
       timers.push(
         setTimeout(() => {
+          // Move card from pending → dealing (now visible + animating)
+          pending.delete(key);
+          setPendingCards(new Set(pending));
           active.add(key);
           setDealingCards(new Set(active));
         }, delay),
@@ -122,6 +166,7 @@ export function useDealAnimation(tableState: TableStatePayload | null) {
       setTimeout(() => {
         setIsDealing(false);
         setDealingCards(new Set());
+        setPendingCards(new Set());
       }, totalMs),
     );
 
@@ -132,10 +177,12 @@ export function useDealAnimation(tableState: TableStatePayload | null) {
 
   const resetDeal = useCallback(() => {
     prevRef.current = null;
+    isFirstLoadRef.current = true;
+    setPendingCards(new Set());
     setDealingCards(new Set());
     setRevealingCards(new Set());
     setIsDealing(false);
   }, []);
 
-  return { dealingCards, revealingCards, isDealing, resetDeal };
+  return { pendingCards, dealingCards, revealingCards, isDealing, resetDeal };
 }

@@ -20,9 +20,14 @@ async def create_session(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SessionResponse:
-    if body.game_type != "blackjack":
+    _game_type_map = {
+        "blackjack": GameType.blackjack,
+        "poker": GameType.poker,
+        "roulette": GameType.roulette,
+    }
+    if body.game_type not in _game_type_map:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="unsupported_game_type")
-    gs = GameSession(user_id=user.id, game_type=GameType.blackjack)
+    gs = GameSession(user_id=user.id, game_type=_game_type_map[body.game_type])
     db.add(gs)
     await db.commit()
     await db.refresh(gs)

@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api import api_router
+from app.api.ws_poker import router as ws_poker_router
 from app.api.ws_table import router as ws_router
 from app.core.config import settings
 from app.db.redis_client import init_redis, shutdown_redis
@@ -21,3 +22,4 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.include_router(api_router, prefix="/api")
 app.include_router(ws_router)
+app.include_router(ws_poker_router)

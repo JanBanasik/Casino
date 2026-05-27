@@ -23,16 +23,14 @@ export default function LiveTableCard({ table, onJoin, onJoinSolo, joining }: Li
         </span>
       </div>
 
-      <div className="seats-row">
-        {Array.from({ length: table.seatsTotal }).map((_, i) => (
-          <span
-            key={i}
-            className={`seat-dot ${i < table.seatsTaken ? "seat-dot--taken" : "seat-dot--free"}`}
-          />
-        ))}
+      <div className="seats-progress-row">
+        <div
+          className="seats-progress-bar"
+          style={{ width: `${(table.seatsTaken / table.seatsTotal) * 100}%` }}
+        />
       </div>
       <p className="seats-label">
-        {table.seatsTaken}/{table.seatsTotal} graczy · {freeSeats} wolnych miejsc
+        {table.seatsTaken}/{table.seatsTotal} graczy · {freeSeats} wolnych
       </p>
 
       <div className="live-table-meta">

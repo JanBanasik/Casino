@@ -1,10 +1,23 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import random
+import uuid as uuid_module
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+_AMBIENT_PROFILES = [
+    ("Alex_K", "a1"),
+    ("Marta99", "m2"),
+    ("JanekW", "j3"),
+    ("Ola_P", "o4"),
+    ("Kris77", "k5"),
+    ("Ewa_M", "e6"),
+    ("TomekB", "t7"),
+]
 
 
 class LobbySeatOccupant(BaseModel):
@@ -12,6 +25,7 @@ class LobbySeatOccupant(BaseModel):
     session_id: UUID
     display_name: str
     avatar_key: str = "you"
+    is_bot: bool = False
 
 
 class TableLobby(BaseModel):
@@ -35,10 +49,46 @@ class TableLobby(BaseModel):
                         "seat_index": i,
                         "display_name": occ.display_name,
                         "avatar_key": occ.avatar_key,
-                        "is_human": True,
+                        "is_human": not occ.is_bot,
                     }
                 )
         return out
+
+    def with_ambient_bots(self, table_id: str, count: int = 4) -> TableLobby:
+        """Return a new TableLobby where empty seats are filled with deterministic ambient bots."""
+        ambient = _get_ambient_bots(table_id, count)
+        merged: list[LobbySeatOccupant | None] = []
+        for i, real in enumerate(self.seats):
+            if real is not None:
+                merged.append(real)
+            else:
+                merged.append(ambient[i])
+        return TableLobby(seats=merged)
+
+
+def _get_ambient_bots(table_id: str, count: int = 4) -> list[LobbySeatOccupant | None]:
+    """Returns a 7-slot list with deterministic bot occupants based on table_id hash."""
+    h = int(hashlib.md5(table_id.encode()).hexdigest(), 16)
+    rng = random.Random(h)
+
+    slots = list(range(7))
+    rng.shuffle(slots)
+    bot_slots = set(slots[:count])
+
+    result: list[LobbySeatOccupant | None] = [None] * 7
+    for idx, slot in enumerate(slots[:count]):
+        profile_idx = (h + idx) % len(_AMBIENT_PROFILES)
+        name, key = _AMBIENT_PROFILES[profile_idx]
+        fake_int = (h ^ (idx << 64)) & ((1 << 128) - 1)
+        fake_uuid = uuid_module.UUID(int=fake_int)
+        result[slot] = LobbySeatOccupant(
+            user_id=fake_uuid,
+            session_id=fake_uuid,
+            display_name=name,
+            avatar_key=key,
+            is_bot=True,
+        )
+    return result
 
 
 def lobby_key(table_id: str) -> str:
@@ -61,6 +111,7 @@ async def load_table_lobby(redis, table_id: str) -> TableLobby:
                     session_id=UUID(item["session_id"]),
                     display_name=item["display_name"],
                     avatar_key=item.get("avatar_key", "you"),
+                    is_bot=item.get("is_bot", False),
                 )
             )
     while len(seats) < 7:
@@ -78,6 +129,7 @@ async def save_table_lobby(redis, table_id: str, lobby: TableLobby, ttl_seconds:
                 "session_id": str(s.session_id),
                 "display_name": s.display_name,
                 "avatar_key": s.avatar_key,
+                "is_bot": s.is_bot,
             }
             for s in lobby.seats
         ]

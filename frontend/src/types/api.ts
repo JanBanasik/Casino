@@ -65,6 +65,57 @@ export interface WsErrorMessage {
   error: string;
 }
 
+export interface PokerSeatPayload {
+  seat_index: number;
+  display_name: string;
+  avatar_key: string;
+  is_human: boolean;
+  hole_cards: string[];  // ["??", "??"] if hidden
+  chips: number;
+  bet_phase: number;
+  bet_total: number;
+  status: "active" | "folded" | "all_in" | "finished" | "empty";
+  result: string | null;
+  payout: number;
+}
+
+export interface PokerStatePayload {
+  table_phase: string;
+  phase: "waiting" | "pre_flop" | "flop" | "turn" | "river" | "showdown" | "finished";
+  community_cards: string[];
+  hole_cards: string[];
+  pot: number;
+  current_bet: number;
+  min_raise: number;
+  active_seat_index: number | null;
+  dealer_seat_index: number;
+  human_seat_index: number | null;
+  small_blind: number;
+  big_blind: number;
+  message: string | null;
+  seats: PokerSeatPayload[];
+  lobby_seats?: (LobbySeatPayload | null)[];
+  my_seat_index?: number | null;
+  round_in_progress?: boolean;
+  waiting_for_round?: boolean;
+}
+
+export interface RoulettePayoutItem {
+  bet_type: string;
+  amount: number;
+  payout: number;
+  won: boolean;
+}
+
+export interface RouletteSpinResult {
+  result: number;
+  color: "red" | "black" | "green";
+  payouts: RoulettePayoutItem[];
+  total_payout: number;
+  net: number;
+  new_balance: number;
+}
+
 export interface TokenResponse {
   access_token: string;
   token_type: string;

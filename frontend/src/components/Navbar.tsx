@@ -8,14 +8,19 @@ export default function Navbar() {
   const [balance, setBalance] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Refresh balance on login AND every 4 s during active session
   useEffect(() => {
     if (!token) {
       setBalance(null);
       return;
     }
-    getWallet()
-      .then((w) => setBalance(w.balance))
-      .catch(() => setBalance(null));
+    const refresh = () =>
+      getWallet()
+        .then((w) => setBalance(w.balance))
+        .catch(() => setBalance(null));
+    refresh();
+    const id = setInterval(refresh, 4000);
+    return () => clearInterval(id);
   }, [token]);
 
   return (
@@ -41,6 +46,7 @@ export default function Navbar() {
           <NavLink to="/" end onClick={() => setMenuOpen(false)}>Strona główna</NavLink>
           <NavLink to="/gry" onClick={() => setMenuOpen(false)}>Gry</NavLink>
           <NavLink to="/stoły" onClick={() => setMenuOpen(false)}>Stoły na żywo</NavLink>
+          <NavLink to="/roulette" onClick={() => setMenuOpen(false)}>Ruletka</NavLink>
           <NavLink to="/promocje" onClick={() => setMenuOpen(false)}>Promocje</NavLink>
         </nav>
 

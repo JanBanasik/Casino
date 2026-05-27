@@ -2,8 +2,35 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import LiveTableCard from "../components/LiveTableCard";
 import { LIVE_TABLES, type LiveTable } from "../data/games";
-import { createSession } from "../services/api";
+import { createSession, createPokerSession } from "../services/api";
 import { useAuth } from "../hooks/useAuth";
+
+const POKER_TABLES = [
+  {
+    id: "poker-table-1",
+    name: "Stół Pokerowy I",
+    blinds: "5 / 10 Ż",
+    players: 4,
+    max: 6,
+    featured: true,
+  },
+  {
+    id: "poker-table-2",
+    name: "Stół Pokerowy II",
+    blinds: "10 / 20 Ż",
+    players: 2,
+    max: 6,
+    featured: false,
+  },
+  {
+    id: "poker-vip",
+    name: "High Roller Poker",
+    blinds: "50 / 100 Ż",
+    players: 1,
+    max: 6,
+    featured: false,
+  },
+];
 
 export default function LiveCasinoPage() {
   const { token } = useAuth();
@@ -54,6 +81,23 @@ export default function LiveCasinoPage() {
     }
   }
 
+  async function handleJoinPoker(tableId: string) {
+    if (!token) {
+      navigate("/login", { state: { from: "/stoły" } });
+      return;
+    }
+    setError(null);
+    setJoiningId(tableId);
+    try {
+      const session = await createPokerSession();
+      navigate(`/poker/${session.id}?table=${tableId}&bots=3`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Nie udało się dołączyć do stołu pokerowego");
+    } finally {
+      setJoiningId(null);
+    }
+  }
+
   const totalPlayers = LIVE_TABLES.reduce((a, t) => a + t.seatsTaken, 0);
 
   return (
@@ -77,10 +121,11 @@ export default function LiveCasinoPage() {
 
       {error && <div className="banner banner--error">{error}</div>}
 
+      {/* ── Blackjack ── */}
       <article className="solo-card">
         <div>
           <span className="live-badge">SOLO</span>
-          <h2>Gra solo</h2>
+          <h2>Blackjack solo</h2>
           <p>Tylko ty i krupier — idealne na szybką rundę bez czekania.</p>
         </div>
         <button
@@ -93,7 +138,7 @@ export default function LiveCasinoPage() {
         </button>
       </article>
 
-      <h2 className="page-section-title">Stoły wieloosobowe</h2>
+      <h2 className="page-section-title">Blackjack — stoły wieloosobowe</h2>
       <div className="live-tables-grid">
         {LIVE_TABLES.map((table) => (
           <LiveTableCard
@@ -104,6 +149,66 @@ export default function LiveCasinoPage() {
             joining={joiningId === table.id}
           />
         ))}
+      </div>
+
+      {/* ── Poker ── */}
+      <div style={{ marginTop: "2.5rem" }}>
+        <h2 className="page-section-title" id="poker">Texas Hold'em — stoły pokerowe</h2>
+        <div className="live-tables-grid">
+          {POKER_TABLES.map((pt) => (
+            <div
+              key={pt.id}
+              className={`live-table-card ${pt.featured ? "live-table-card--featured" : ""}`}
+            >
+              <div className="live-table-header">
+                <div>
+                  <h3>{pt.name}</h3>
+                  <p className="live-dealer">Blindy: {pt.blinds}</p>
+                </div>
+                <span className="level-badge level-standard">POKER</span>
+              </div>
+              <div className="seats-row">
+                {Array.from({ length: pt.max }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`seat-dot ${i < pt.players ? "seat-dot--taken" : "seat-dot--free"}`}
+                  />
+                ))}
+              </div>
+              <p className="seats-label">
+                {pt.players}/{pt.max} graczy
+              </p>
+              <div className="live-table-actions">
+                <button
+                  type="button"
+                  className="btn btn-gold btn-block"
+                  disabled={joiningId === pt.id}
+                  onClick={() => handleJoinPoker(pt.id)}
+                >
+                  {joiningId === pt.id ? "Dołączanie…" : "Dołącz do stołu"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Roulette ── */}
+      <div style={{ marginTop: "2.5rem" }}>
+        <h2 className="page-section-title">Ruletka</h2>
+        <div
+          className="solo-card"
+          style={{ background: "linear-gradient(135deg, #3d1010, #1a0808)", borderColor: "rgba(180, 30, 30, 0.4)" }}
+        >
+          <div>
+            <span className="live-badge" style={{ background: "#991111" }}>LIVE</span>
+            <h2>Ruletka Europejska</h2>
+            <p>37 numerów, europejskie zasady — postaw zakład i zakręć kołem.</p>
+          </div>
+          <Link to="/roulette" className="btn btn-gold">
+            Graj w ruletkę
+          </Link>
+        </div>
       </div>
     </div>
   );

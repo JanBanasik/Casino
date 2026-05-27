@@ -10,8 +10,8 @@ from app.core.config import settings
 from app.core.ws_tickets import consume_ws_ticket
 from app.db import session as db_session
 from app.db.redis_client import get_redis
-from app.engine.blackjack import BlackjackAction
-from app.services.game_round import GameRoundService
+from app.engine.poker import PokerAction
+from app.services.poker_round import PokerRoundService
 
 router = APIRouter()
 
@@ -61,72 +61,19 @@ async def _authenticate_ws(websocket: WebSocket, table_id: str) -> UUID | None:
     return payload.user_id
 
 
-async def _emit_seat_actions(websocket: WebSocket, events: list[dict], public: dict) -> None:
-    """Legacy helper — used only for human HIT results (no intermediate states needed)."""
+async def _emit_seat_actions(
+    websocket: WebSocket,
+    events: list[dict],
+    public: dict,
+) -> None:
     for ev in events:
         await websocket.send_json({"type": "seat_action", "payload": ev})
-        await asyncio.sleep(0.08)
+        await asyncio.sleep(0.35)
     await websocket.send_json({"type": "state", "payload": public})
 
 
-async def _run_deal_sequence(
-    websocket: WebSocket,
-    svc,
-    user_id,
-    sid,
-    table_id: str,
-    bet: float,
-    solo: bool,
-    bot_count: int,
-) -> None:
-    """Full deal + bot-thinking sequence with incremental state updates."""
-    # 1. Deal cards — send initial state (all cards fly in simultaneously-staggered)
-    _, initial_public, _, total_players = await svc.begin_round(
-        user_id, sid, table_id, bet, solo=solo, bot_count=bot_count
-    )
-    await websocket.send_json({"type": "state", "payload": initial_public})
-
-    # 2. Wait for deal animation to complete before bots start acting
-    #    (~400ms per card * 2 cards per player * total_players + buffer)
-    deal_wait = total_players * 2 * 0.40 + 1.0
-    await asyncio.sleep(deal_wait)
-
-    # 3. Process bots one by one with "thinking" delay
-    while True:
-        result = await svc.advance_next_bot_step(user_id, table_id)
-        if result is None:
-            break
-        event, public, stop = result
-        await websocket.send_json({"type": "seat_action", "payload": event})
-        await asyncio.sleep(1.4)  # bot "thinks" before state reveals
-        await websocket.send_json({"type": "state", "payload": public})
-        if stop:
-            return
-
-    # 4. If we get here, it's the human's turn — nothing more to send
-
-
-async def _run_dealer_sequence(
-    websocket: WebSocket,
-    svc,
-    user_id,
-    table_id: str,
-) -> None:
-    """After all players act, dealer draws card by card with dramatic pauses."""
-    await asyncio.sleep(0.6)
-    while True:
-        result = await svc.dealer_step(user_id, table_id)
-        if result is None:
-            break
-        public, done = result
-        await websocket.send_json({"type": "state", "payload": public})
-        if done:
-            break
-        await asyncio.sleep(0.9)  # pause between dealer cards
-
-
-@router.websocket("/ws/tables/{table_id}")
-async def table_ws(websocket: WebSocket, table_id: str) -> None:
+@router.websocket("/ws/poker/{table_id}")
+async def poker_ws(websocket: WebSocket, table_id: str) -> None:
     await websocket.accept()
     user_id = await _authenticate_ws(websocket, table_id)
     if user_id is None:
@@ -136,7 +83,7 @@ async def table_ws(websocket: WebSocket, table_id: str) -> None:
 
     if db_session.async_session_factory is not None:
         async with db_session.async_session_factory() as db:
-            svc = GameRoundService(db, redis)
+            svc = PokerRoundService(db, redis)
             snap = await svc.table_snapshot(user_id, table_id)
             await websocket.send_json({"type": "state", "payload": snap})
 
@@ -157,7 +104,7 @@ async def table_ws(websocket: WebSocket, table_id: str) -> None:
             continue
 
         async with db_session.async_session_factory() as db:
-            svc = GameRoundService(db, redis)
+            svc = PokerRoundService(db, redis)
             try:
                 match mtype:
                     case "sit":
@@ -165,31 +112,35 @@ async def table_ws(websocket: WebSocket, table_id: str) -> None:
                         seat_index = int(msg.get("seat_index", 0))
                         public = await svc.sit_at_table(user_id, sid, table_id, seat_index)
                         await websocket.send_json({"type": "state", "payload": public})
-                    case "place_bet" | "new_round":
+
+                    case "start_hand":
                         sid = UUID(str(msg["session_id"]))
-                        bet = float(msg.get("bet", 10))
-                        solo = bool(msg.get("solo", False))
-                        bot_count = int(msg.get("bot_count", 0))
-                        # Incremental: deal → animate → bots think → human's turn
-                        await _run_deal_sequence(
-                            websocket, svc, user_id, sid, table_id, bet, solo, bot_count
+                        buy_in = float(msg.get("buy_in", 500))
+                        bot_count = int(msg.get("bot_count", 2))
+                        _, public, seat_events = await svc.start_hand(
+                            user_id, sid, table_id, buy_in, bot_count
                         )
+                        await _emit_seat_actions(websocket, seat_events, public)
+
                     case "action":
                         raw_action = str(msg.get("action", "")).upper()
-                        action = BlackjackAction(raw_action)
-                        public, retention, seat_events = await svc.apply_player_action(
-                            user_id, table_id, action
+                        # PokerAction uses "RAISE" but enum value is "RAISE"
+                        action_map = {
+                            "FOLD": PokerAction.fold,
+                            "CHECK": PokerAction.check,
+                            "CALL": PokerAction.call,
+                            "RAISE": PokerAction.raise_,
+                        }
+                        action = action_map.get(raw_action)
+                        if action is None:
+                            await websocket.send_json({"error": "unknown_action"})
+                            continue
+                        raise_amount = float(msg.get("amount", 0))
+                        public, seat_events = await svc.apply_action(
+                            user_id, table_id, action, raise_amount
                         )
-                        if retention:
-                            public = dict(public)
-                            public["retention"] = retention
-                        # Send human's action result immediately
                         await _emit_seat_actions(websocket, seat_events, public)
-                        # If dealer turn just started, run dealer sequence
-                        if public.get("phase") in ("dealer_turn", "finished") and not public.get("round_in_progress", True):
-                            pass  # already settled in apply_player_action
-                        elif public.get("phase") == "dealer_turn":
-                            await _run_dealer_sequence(websocket, svc, user_id, table_id)
+
                     case None:
                         await websocket.send_json({"error": "missing_type"})
                     case _:

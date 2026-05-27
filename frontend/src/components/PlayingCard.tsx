@@ -5,6 +5,7 @@ interface PlayingCardProps {
   hidden?: boolean;
   dealing?: boolean;
   revealing?: boolean;
+  pending?: boolean;
   compact?: boolean;
   dealFrom?: { x: number; y: number };
 }
@@ -25,6 +26,7 @@ export default function PlayingCard({
   hidden,
   dealing,
   revealing,
+  pending,
   compact,
   dealFrom,
 }: PlayingCardProps) {
@@ -34,6 +36,7 @@ export default function PlayingCard({
     dealing ? "playing-card--dealing" : "",
     revealing ? "playing-card--reveal" : "",
     hidden ? "playing-card--back" : "",
+    pending ? "playing-card--pending" : "",
   ]
     .filter(Boolean)
     .join(" ");
