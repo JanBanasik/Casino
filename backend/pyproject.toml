@@ -15,6 +15,9 @@ dependencies = [
     "redis[hiredis]==5.2.1",
     "sqlalchemy[asyncio]==2.0.40",
     "uvicorn[standard]==0.34.0",
+    "pyresilience==0.3.2",
+    "slowapi==0.1.9",
+    "loguru==0.7.2",
 ]
 
 [dependency-groups]

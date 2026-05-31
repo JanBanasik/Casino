@@ -4,6 +4,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, WebSocket
+from loguru import logger
 from starlette.websockets import WebSocketDisconnect
 
 from app.core.config import settings
@@ -58,7 +59,18 @@ async def _authenticate_ws(websocket: WebSocket, table_id: str) -> UUID | None:
         return None
 
     await websocket.send_json({"type": "auth_ok"})
+    logger.info("WS table auth_ok user={} table={}", payload.user_id, table_id)
     return payload.user_id
+
+
+async def _heartbeat(websocket: WebSocket, interval: int = 25) -> None:
+    """Sends ping every `interval` seconds; exits silently when connection dies."""
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            await websocket.send_json({"type": "ping"})
+        except Exception:
+            return
 
 
 async def _emit_seat_actions(websocket: WebSocket, events: list[dict], public: dict) -> None:
@@ -140,61 +152,73 @@ async def table_ws(websocket: WebSocket, table_id: str) -> None:
             snap = await svc.table_snapshot(user_id, table_id)
             await websocket.send_json({"type": "state", "payload": snap})
 
-    while True:
-        try:
-            raw = await websocket.receive_text()
-        except WebSocketDisconnect:
-            return
-        try:
-            msg: dict[str, Any] = json.loads(raw)
-        except json.JSONDecodeError:
-            await websocket.send_json({"error": "invalid_json"})
-            continue
-
-        mtype = msg.get("type")
-        if db_session.async_session_factory is None:
-            await websocket.send_json({"error": "server_misconfigured"})
-            continue
-
-        async with db_session.async_session_factory() as db:
-            svc = GameRoundService(db, redis)
+    heartbeat_task = asyncio.create_task(_heartbeat(websocket))
+    try:
+        while True:
             try:
-                match mtype:
-                    case "sit":
-                        sid = UUID(str(msg["session_id"]))
-                        seat_index = int(msg.get("seat_index", 0))
-                        public = await svc.sit_at_table(user_id, sid, table_id, seat_index)
-                        await websocket.send_json({"type": "state", "payload": public})
-                    case "place_bet" | "new_round":
-                        sid = UUID(str(msg["session_id"]))
-                        bet = float(msg.get("bet", 10))
-                        solo = bool(msg.get("solo", False))
-                        bot_count = int(msg.get("bot_count", 0))
-                        # Incremental: deal → animate → bots think → human's turn
-                        await _run_deal_sequence(
-                            websocket, svc, user_id, sid, table_id, bet, solo, bot_count
-                        )
-                    case "action":
-                        raw_action = str(msg.get("action", "")).upper()
-                        action = BlackjackAction(raw_action)
-                        public, retention, seat_events = await svc.apply_player_action(
-                            user_id, table_id, action
-                        )
-                        if retention:
-                            public = dict(public)
-                            public["retention"] = retention
-                        # Send human's action result immediately
-                        await _emit_seat_actions(websocket, seat_events, public)
-                        # If dealer turn just started, run dealer sequence
-                        if public.get("phase") in ("dealer_turn", "finished") and not public.get("round_in_progress", True):
-                            pass  # already settled in apply_player_action
-                        elif public.get("phase") == "dealer_turn":
-                            await _run_dealer_sequence(websocket, svc, user_id, table_id)
-                    case None:
-                        await websocket.send_json({"error": "missing_type"})
-                    case _:
-                        await websocket.send_json({"error": "unknown_type"})
-            except ValueError as e:
-                await websocket.send_json({"error": str(e)})
-            except KeyError as e:
-                await websocket.send_json({"error": f"missing_field:{e.args[0]!s}"})
+                raw = await websocket.receive_text()
+            except WebSocketDisconnect:
+                logger.info("WS table disconnect user={} table={}", user_id, table_id)
+                return
+            try:
+                msg: dict[str, Any] = json.loads(raw)
+            except json.JSONDecodeError:
+                await websocket.send_json({"error": "invalid_json"})
+                continue
+
+            mtype = msg.get("type")
+            if db_session.async_session_factory is None:
+                await websocket.send_json({"error": "server_misconfigured"})
+                continue
+
+            async with db_session.async_session_factory() as db:
+                svc = GameRoundService(db, redis)
+                try:
+                    match mtype:
+                        case "sit":
+                            sid = UUID(str(msg["session_id"]))
+                            seat_index = int(msg.get("seat_index", 0))
+                            public = await svc.sit_at_table(user_id, sid, table_id, seat_index)
+                            await websocket.send_json({"type": "state", "payload": public})
+                        case "place_bet" | "new_round":
+                            sid = UUID(str(msg["session_id"]))
+                            bet = float(msg.get("bet", 10))
+                            solo = bool(msg.get("solo", False))
+                            bot_count = int(msg.get("bot_count", 0))
+                            # Incremental: deal → animate → bots think → human's turn
+                            await _run_deal_sequence(
+                                websocket, svc, user_id, sid, table_id, bet, solo, bot_count
+                            )
+                        case "action":
+                            raw_action = str(msg.get("action", "")).upper()
+                            action = BlackjackAction(raw_action)
+                            public, retention, seat_events = await svc.apply_player_action(
+                                user_id, table_id, action
+                            )
+                            if retention:
+                                public = dict(public)
+                                public["retention"] = retention
+                            # Send human's action result immediately
+                            await _emit_seat_actions(websocket, seat_events, public)
+                            # If dealer turn just started, run dealer sequence
+                            phase = public.get("phase")
+                            in_progress = public.get("round_in_progress", True)
+                            already_settled = (
+                                phase in ("dealer_turn", "finished") and not in_progress
+                            )
+                            if already_settled:
+                                pass  # already settled in apply_player_action
+                            elif phase == "dealer_turn":
+                                await _run_dealer_sequence(websocket, svc, user_id, table_id)
+                        case "pong":
+                            pass  # heartbeat response — keep connection alive
+                        case None:
+                            await websocket.send_json({"error": "missing_type"})
+                        case _:
+                            await websocket.send_json({"error": "unknown_type"})
+                except ValueError as e:
+                    await websocket.send_json({"error": str(e)})
+                except KeyError as e:
+                    await websocket.send_json({"error": f"missing_field:{e.args[0]!s}"})
+    finally:
+        heartbeat_task.cancel()

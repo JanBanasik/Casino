@@ -31,8 +31,15 @@ export function usePokerSocket(
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [pokerState, setPokerState] = useState<PokerStatePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const disconnect = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    reconnectAttemptRef.current = 0;
     wsRef.current?.close();
     wsRef.current = null;
     setStatus("idle");
@@ -40,7 +47,12 @@ export function usePokerSocket(
 
   const connect = useCallback(async () => {
     if (!sessionId) return;
-    disconnect();
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    wsRef.current?.close();
+    wsRef.current = null;
     setError(null);
     setStatus("connecting");
 
@@ -59,9 +71,15 @@ export function usePokerSocket(
           | WsAuthError
           | WsPokerStateMessage
           | WsPokerActionMessage
+          | { type: "ping" }
           | { error: string };
 
+        if ("type" in data && data.type === "ping") {
+          ws.send(JSON.stringify({ type: "pong" }));
+          return;
+        }
         if ("type" in data && data.type === "auth_ok") {
+          reconnectAttemptRef.current = 0;
           setStatus("connected");
           return;
         }
@@ -86,15 +104,28 @@ export function usePokerSocket(
       };
 
       ws.onclose = () => {
-        setStatus((s) => (s === "error" ? s : "idle"));
+        setStatus((s) => {
+          if (s === "error") return s;
+          const attempt = reconnectAttemptRef.current++;
+          if (attempt >= 5) {
+            setError("Utracono połączenie ze stołem");
+            return "error";
+          }
+          const delay = Math.min(1000 * 2 ** attempt, 30_000);
+          reconnectTimerRef.current = setTimeout(() => connect(), delay);
+          return "connecting";
+        });
       };
     } catch (e) {
       setError(e instanceof Error ? e.message : "Połączenie nie powiodło się");
       setStatus("error");
     }
-  }, [sessionId, tableId, disconnect]);
+  }, [sessionId, tableId]);
 
-  useEffect(() => () => disconnect(), [disconnect]);
+  useEffect(() => () => {
+    if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+    wsRef.current?.close();
+  }, []);
 
   const sit = useCallback(
     (seatIndex: number) => {

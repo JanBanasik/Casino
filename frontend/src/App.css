@@ -1436,6 +1436,24 @@ a:hover {
   letter-spacing: 0.02em;
 }
 
+.seat-bet--win {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(34, 197, 94, 0.4);
+}
+
+.seat-bet--loss {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(239, 68, 68, 0.3);
+}
+
+.seat-bet--fold {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  box-shadow: none;
+}
+
 .seat-hand {
   display: flex;
   flex-wrap: nowrap;
@@ -2393,4 +2411,123 @@ a:hover {
     width: 60px;
     height: 84px;
   }
+}
+
+/* ── Hand value badge ── */
+.seat-hand-value {
+  font-size: 0.72rem;
+  font-weight: 800;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  padding: 0.1rem 0.45rem;
+  color: #fff;
+  letter-spacing: 0.02em;
+  margin-top: 0.1rem;
+  text-align: center;
+}
+
+.seat-hand-value--bust {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.seat-hand-value--blackjack {
+  color: var(--gold-light);
+  border-color: rgba(212, 175, 55, 0.5);
+  text-shadow: 0 0 8px rgba(212, 175, 55, 0.4);
+}
+
+/* ── Win / loss overlay on table ── */
+.round-result-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  animation: overlayIn 0.3s ease-out;
+  pointer-events: none;
+}
+
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.round-result-card {
+  background: linear-gradient(145deg, #1a2e20, #0e1e16);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  border-radius: 20px;
+  padding: 2.5rem 3.5rem;
+  text-align: center;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(212, 175, 55, 0.08) inset;
+  animation: cardPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes cardPop {
+  from { transform: scale(0.7) translateY(20px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.round-result-card__label {
+  font-family: var(--font-display);
+  font-size: 2.25rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.round-result-card__label--win  { color: var(--gold-light); text-shadow: 0 0 30px rgba(212,175,55,0.5); }
+.round-result-card__label--loss { color: #f87171; text-shadow: 0 0 20px rgba(248,113,113,0.35); }
+.round-result-card__label--draw { color: var(--text-muted); }
+
+.round-result-card__amount {
+  font-size: 1.35rem;
+  color: var(--text-muted);
+}
+
+.round-result-card__amount--win  { color: #4ade80; }
+.round-result-card__amount--loss { color: #f87171; }
+
+/* ── Roulette desktop side-by-side layout ── */
+.roulette-main-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (min-width: 900px) {
+  .roulette-main-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 2rem;
+    align-items: start;
+  }
+
+  .roulette-wheel-container {
+    margin-bottom: 0;
+    position: sticky;
+    top: 80px;
+  }
+
+  .roulette-wheel-wrapper {
+    width: 280px;
+    height: 280px;
+  }
+
+  .roulette-wheel {
+    width: 280px;
+    height: 280px;
+  }
+}
+
+/* ── Dealer visible card hint ── */
+.dealer-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 0.35rem;
+  letter-spacing: 0.03em;
 }

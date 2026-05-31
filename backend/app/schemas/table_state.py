@@ -6,6 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.db.resilience import redis_resilient
 from app.engine.blackjack import BlackjackPhase
 from app.engine.multi_seat import MultiSeatBlackjackState, SeatState, SeatStatus
 
@@ -113,6 +114,7 @@ def table_state_key(table_id: str) -> str:
     return f"table:{table_id}:state"
 
 
+@redis_resilient
 async def load_table_state(redis, table_id: str) -> RedisTableState | None:
     raw = await redis.get(table_state_key(table_id))
     if not raw:
@@ -145,6 +147,7 @@ async def load_table_state(redis, table_id: str) -> RedisTableState | None:
     return RedisTableState.model_validate(data)
 
 
+@redis_resilient
 async def save_table_state(redis, state: RedisTableState, ttl_seconds: int) -> None:
     payload = state.model_dump(mode="json")
     payload["session_id"] = str(state.session_id)

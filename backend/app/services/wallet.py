@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.models import Transaction, TransactionType, Wallet
+from app.db.resilience import db_resilient
 
 
 class WalletService:
@@ -17,6 +18,7 @@ class WalletService:
         )
         return result.scalar_one_or_none()
 
+    @db_resilient
     async def apply_amount(
         self,
         wallet_id: UUID,

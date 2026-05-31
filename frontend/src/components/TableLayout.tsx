@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import type { LobbySeatPayload, SeatStatePayload, TableStatePayload } from "../types/api";
 import { DEALER_DEAL_OFFSET, SEAT_COUNT, seatPosition } from "../data/games";
 import type { AmbientSeat } from "../hooks/useAmbientTable";
+import { calcHandValue } from "../utils/cards";
 import PlayingCard from "./PlayingCard";
 import SeatAvatar from "./SeatAvatar";
 
@@ -64,7 +65,12 @@ export default function TableLayout({
         </div>
 
         <div className="dealer-zone">
-          <span className="zone-label">Krupier</span>
+          <span className="zone-label">
+            Krupier
+            {hideDealerHole && dealerHand.length > 0 && (
+              <span className="dealer-hint"> · widoczna: {dealerHand[0]?.slice(0, -1)}</span>
+            )}
+          </span>
           <div className="hand-row hand-row--dealer">
             {displayDealerHand.map((c, i) => (
               <PlayingCard
@@ -90,6 +96,15 @@ export default function TableLayout({
               <span className="placeholder-text placeholder-text--dealer">Stół gotowy</span>
             )}
           </div>
+          {!hideDealerHole && displayDealerHand.length > 0 && (() => {
+            const v = calcHandValue(displayDealerHand);
+            const bust = v > 21;
+            return (
+              <div className={`seat-hand-value${bust ? " seat-hand-value--bust" : ""}`} style={{ marginTop: "0.3rem" }}>
+                {bust ? `${v} — fura` : v}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="seats-row">

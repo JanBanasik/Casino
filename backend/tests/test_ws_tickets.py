@@ -98,6 +98,16 @@ def test_ws_auth_handshake_and_new_round(client):
         auth = ws.receive_json()
         assert auth["type"] == "auth_ok"
 
+        # On connect the server pushes an initial table snapshot (idle table) — drain it.
+        snapshot = ws.receive_json()
+        assert snapshot["type"] == "state"
+
+        # Multi-seat flow: the player must take a seat before starting a round.
+        ws.send_json({"type": "sit", "session_id": session_id, "seat_index": 0})
+        seated = ws.receive_json()
+        assert seated["type"] == "state"
+        assert seated["payload"]["my_seat_index"] == 0
+
         ws.send_json({"type": "new_round", "session_id": session_id, "bet": 10})
         state = ws.receive_json()
         assert state["type"] == "state"

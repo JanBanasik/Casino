@@ -15,6 +15,10 @@ def init_db_engine() -> None:
     _engine = create_async_engine(
         settings.database_url,
         echo=settings.debug,
+        pool_size=10,
+        max_overflow=20,
+        pool_timeout=30,
+        pool_pre_ping=True,  # silently replaces stale connections
     )
     async_session_factory = async_sessionmaker(_engine, expire_on_commit=False, class_=AsyncSession)
 

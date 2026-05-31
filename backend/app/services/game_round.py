@@ -231,13 +231,18 @@ class GameRoundService:
         round_done = st.phase == BlackjackPhase.finished
 
         if round_done:
-            bonus = await self._finalize_round_db(
+            # NOTE: _finalize_round_db may grant a bad-beat bonus, but this bot-advance
+            # path does not surface it to the client (unlike apply_player_action).
+            # See backlog: propagate retention through advance_next_bot_step.
+            await self._finalize_round_db(
                 st, loaded.session_id, user_id, table_id, WalletService(self.session)
             )
             await self.redis.delete(f"table:{table_id}:state")
             await self.session.commit()
         else:
-            redis_st = RedisTableState.from_multi(table_id, loaded.session_id, user_id, st, loaded.bot_count)
+            redis_st = RedisTableState.from_multi(
+                table_id, loaded.session_id, user_id, st, loaded.bot_count
+            )
             await save_table_state(self.redis, redis_st, settings.table_state_ttl_seconds)
             await self.session.commit()
 
@@ -371,11 +376,19 @@ class GameRoundService:
         seat_events: list[dict] = []
         pre_human = advance_bot_turns(st, _bot_policy, stop_at_human=True)
         for idx, action in pre_human:
-            seat_events.append({"seat_index": idx, "action": action.value, "display_name": st.seats[idx].display_name})
+            seat_events.append(
+                {
+                    "seat_index": idx,
+                    "action": action.value,
+                    "display_name": st.seats[idx].display_name,
+                }
+            )
 
         if st.phase == BlackjackPhase.finished:
             finish_dealer_and_settle(st)
-            bonus = await self._finalize_round_db(st, game_session_id, user_id, table_id, wallet_svc)
+            bonus = await self._finalize_round_db(
+                st, game_session_id, user_id, table_id, wallet_svc
+            )
             await self.session.commit()
             public = st.to_public_dict(table_phase="idle")
             public["lobby_seats"] = (await load_table_lobby(self.redis, table_id)).to_public()

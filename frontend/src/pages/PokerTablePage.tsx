@@ -201,7 +201,7 @@ export default function PokerTablePage() {
 
         {/* Showdown result */}
         {(phase === "showdown" || phase === "finished") && seat.result && (
-          <span className={`seat-bet ${seat.result === "win" ? "" : ""}`}>
+          <span className={`seat-bet seat-bet--${seat.result === "win" ? "win" : seat.result === "fold" ? "fold" : "loss"}`}>
             {handResultLabel(seat.result)}
           </span>
         )}

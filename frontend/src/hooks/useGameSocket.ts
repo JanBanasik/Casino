@@ -22,8 +22,15 @@ export function useGameSocket(
   const [error, setError] = useState<string | null>(null);
   const [retentionAlert, setRetentionAlert] = useState<string | null>(null);
   const [lastSeatAction, setLastSeatAction] = useState<WsSeatActionMessage["payload"] | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const disconnect = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    reconnectAttemptRef.current = 0;
     wsRef.current?.close();
     wsRef.current = null;
     setStatus("idle");
@@ -31,7 +38,12 @@ export function useGameSocket(
 
   const connect = useCallback(async () => {
     if (!sessionId) return;
-    disconnect();
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    wsRef.current?.close();
+    wsRef.current = null;
     setError(null);
     setStatus("connecting");
 
@@ -50,9 +62,15 @@ export function useGameSocket(
           | WsAuthError
           | WsStateMessage
           | WsSeatActionMessage
+          | { type: "ping" }
           | { error: string };
 
+        if ("type" in data && data.type === "ping") {
+          ws.send(JSON.stringify({ type: "pong" }));
+          return;
+        }
         if ("type" in data && data.type === "auth_ok") {
+          reconnectAttemptRef.current = 0;
           setStatus("connected");
           return;
         }
@@ -63,20 +81,20 @@ export function useGameSocket(
           return;
         }
         if ("type" in data && data.type === "seat_action") {
-          setLastSeatAction(data.payload);
+          setLastSeatAction((data as WsSeatActionMessage).payload);
           return;
         }
         if ("type" in data && data.type === "state") {
-          setTableState(data.payload);
-          if (data.payload.retention?.bad_beat_bonus) {
+          setTableState((data as WsStateMessage).payload);
+          if ((data as WsStateMessage).payload.retention?.bad_beat_bonus) {
             setRetentionAlert(
-              `Szczęście się odwraca! +${data.payload.retention.amount} żetonów`,
+              `Szczęście się odwraca! +${(data as WsStateMessage).payload.retention?.amount} żetonów`,
             );
           }
           return;
         }
         if ("error" in data) {
-          setError(data.error);
+          setError((data as { error: string }).error);
         }
       };
 
@@ -86,15 +104,28 @@ export function useGameSocket(
       };
 
       ws.onclose = () => {
-        setStatus((s) => (s === "error" ? s : "idle"));
+        setStatus((s) => {
+          if (s === "error") return s;
+          const attempt = reconnectAttemptRef.current++;
+          if (attempt >= 5) {
+            setError("Utracono połączenie ze stołem");
+            return "error";
+          }
+          const delay = Math.min(1000 * 2 ** attempt, 30_000);
+          reconnectTimerRef.current = setTimeout(() => connect(), delay);
+          return "connecting";
+        });
       };
     } catch (e) {
       setError(e instanceof Error ? e.message : "Połączenie nie powiodło się");
       setStatus("error");
     }
-  }, [sessionId, tableId, disconnect]);
+  }, [sessionId, tableId]);
 
-  useEffect(() => () => disconnect(), [disconnect]);
+  useEffect(() => () => {
+    if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+    wsRef.current?.close();
+  }, []);
 
   const sit = useCallback(
     (seatIndex: number) => {

@@ -141,6 +141,8 @@ async def poker_ws(websocket: WebSocket, table_id: str) -> None:
                         )
                         await _emit_seat_actions(websocket, seat_events, public)
 
+                    case "pong":
+                        pass  # heartbeat response
                     case None:
                         await websocket.send_json({"error": "missing_type"})
                     case _:

@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { SeatStatePayload } from "../types/api";
 import { avatarColor, dealOffsetFromDealer } from "../data/games";
+import { calcHandValue } from "../utils/cards";
 import PlayingCard from "./PlayingCard";
 
 interface SeatAvatarProps {
@@ -76,22 +77,34 @@ export default function SeatAvatar({
       <span className="seat-name">{isHuman ? "Ty" : displayName}</span>
       {bet !== undefined && bet > 0 && <span className="seat-bet">{bet} Ż</span>}
       {hand.length > 0 && (
-        <div className="seat-hand">
-          {hand.map((c, i) => {
-            const key = `seat-${seatIndex}-${i}`;
+        <>
+          <div className="seat-hand">
+            {hand.map((c, i) => {
+              const key = `seat-${seatIndex}-${i}`;
+              return (
+                <PlayingCard
+                  key={`${c}-${i}`}
+                  card={c}
+                  compact={compact}
+                  pending={pendingCards?.has(key)}
+                  dealing={dealingCards?.has(key)}
+                  revealing={revealingCards?.has(key)}
+                  dealFrom={dealFrom}
+                />
+              );
+            })}
+          </div>
+          {(() => {
+            const v = calcHandValue(hand);
+            const bust = v > 21;
+            const bj = v === 21 && hand.length === 2;
             return (
-              <PlayingCard
-                key={`${c}-${i}`}
-                card={c}
-                compact={compact}
-                pending={pendingCards?.has(key)}
-                dealing={dealingCards?.has(key)}
-                revealing={revealingCards?.has(key)}
-                dealFrom={dealFrom}
-              />
+              <div className={`seat-hand-value${bust ? " seat-hand-value--bust" : bj ? " seat-hand-value--blackjack" : ""}`}>
+                {bj ? "BJ!" : bust ? `${v} — fura` : v}
+              </div>
             );
-          })}
-        </div>
+          })()}
+        </>
       )}
     </div>
   );

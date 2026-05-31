@@ -177,7 +177,8 @@ export default function RoulettePage() {
           </div>
         </div>
 
-        {/* Wheel */}
+        <div className="roulette-main-layout">
+        {/* Wheel column */}
         <div className="roulette-wheel-container">
           <div className="roulette-wheel-wrapper">
             <div
@@ -246,6 +247,8 @@ export default function RoulettePage() {
           </div>
         </div>
 
+        {/* Bets column */}
+        <div>
         {/* Chip selector */}
         <div className="roulette-chip-selector">
           <span className="roulette-chip-selector-label">Żeton:</span>
@@ -410,6 +413,8 @@ export default function RoulettePage() {
             </div>
           </div>
         )}
+        </div>{/* end bets column */}
+        </div>{/* end roulette-main-layout */}
       </div>
     </div>
   );

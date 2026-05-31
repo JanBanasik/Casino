@@ -96,7 +96,9 @@ class PokerState:
                 "display_name": s.display_name,
                 "avatar_key": s.avatar_key,
                 "is_human": s.is_human,
-                "hole_cards": list(s.hole_cards) if show_cards else (["??", "??"] if s.hole_cards else []),
+                "hole_cards": list(s.hole_cards)
+                if show_cards
+                else (["??", "??"] if s.hole_cards else []),
                 "chips": s.chips,
                 "bet_phase": s.bet_phase,
                 "bet_total": s.bet_total,
@@ -375,7 +377,6 @@ def _is_betting_complete(state: PokerState) -> bool:
 def _advance_phase(state: PokerState) -> None:
     """Move to next community card phase or showdown."""
     _reset_phase_bets(state)
-    still_active = [s for s in state.seats if s.status in (SeatStatus.active, SeatStatus.all_in)]
     # If only 1 player left (others folded) → skip to showdown
     if len([s for s in state.seats if s.status == SeatStatus.active]) <= 1:
         # run out the board if needed

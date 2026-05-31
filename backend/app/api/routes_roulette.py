@@ -1,12 +1,13 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
+from app.core.limiter import limiter
 from app.db.models import GameSession, GameType, Round, RoundResult, TransactionType, User
 from app.engine.roulette import (
     BetType,
@@ -43,7 +44,9 @@ class RouletteSpinResponse(BaseModel):
 
 
 @router.post("/spin", response_model=RouletteSpinResponse)
+@limiter.limit("20/minute")
 async def roulette_spin(
+    request: Request,
     body: RouletteSpinRequest,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],

@@ -1,12 +1,13 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
 from app.api.dto import SessionCreateRequest, SessionResponse, WsTicketRequest, WsTicketResponse
+from app.core.limiter import limiter
 from app.core.ws_tickets import create_ws_ticket
 from app.db.models import GameSession, GameType, User
 from app.db.redis_client import get_redis
@@ -15,7 +16,9 @@ router = APIRouter()
 
 
 @router.post("", response_model=SessionResponse)
+@limiter.limit("30/minute")
 async def create_session(
+    request: Request,
     body: SessionCreateRequest,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -39,7 +42,9 @@ async def create_session(
 
 
 @router.post("/{session_id}/ws-ticket", response_model=WsTicketResponse)
+@limiter.limit("60/minute")
 async def mint_ws_ticket(
+    request: Request,
     session_id: UUID,
     body: WsTicketRequest,
     user: Annotated[User, Depends(get_current_user)],

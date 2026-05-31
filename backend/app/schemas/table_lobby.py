@@ -73,7 +73,6 @@ def _get_ambient_bots(table_id: str, count: int = 4) -> list[LobbySeatOccupant |
 
     slots = list(range(7))
     rng.shuffle(slots)
-    bot_slots = set(slots[:count])
 
     result: list[LobbySeatOccupant | None] = [None] * 7
     for idx, slot in enumerate(slots[:count]):

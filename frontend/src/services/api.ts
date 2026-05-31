@@ -31,12 +31,33 @@ async function apiFetch<T>(
     if (!token) throw new Error("Not authenticated");
     headers.set("Authorization", `Bearer ${token}`);
   }
-  const res = await fetch(path, { ...options, headers });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail ?? `Request failed (${res.status})`);
+
+  let lastRes: Response | undefined;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    try {
+      const res = await fetch(path, { ...options, headers, signal: controller.signal });
+      lastRes = res;
+      if (res.status < 500) {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.detail ?? `Request failed (${res.status})`);
+        }
+        return res.json() as Promise<T>;
+      }
+      // 5xx — retry once
+    } catch (e) {
+      if (attempt === 1) throw e;
+      if (e instanceof Error && e.name !== "AbortError") throw e;
+    } finally {
+      clearTimeout(timer);
+    }
   }
-  return res.json() as Promise<T>;
+
+  // Both attempts returned 5xx
+  const body = await lastRes!.json().catch(() => ({}));
+  throw new Error(body.detail ?? `Request failed (${lastRes!.status})`);
 }
 
 export function register(username: string, email: string, password: string) {

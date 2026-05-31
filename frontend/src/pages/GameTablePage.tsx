@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import TableActionBanner from "../components/TableActionBanner";
 import TableLayout from "../components/TableLayout";
@@ -39,6 +39,8 @@ export default function GameTablePage() {
   const navigate = useNavigate();
   const [balance, setBalance] = useState(0);
   const [bet, setBet] = useState(minBet);
+  const [roundResult, setRoundResult] = useState<{ label: string; amount: string; type: "win" | "loss" | "draw" } | null>(null);
+  const prevPhaseRef = useRef<string | undefined>(undefined);
 
   const tableMeta = LIVE_TABLES.find((t) => t.id === tableId);
 
@@ -102,6 +104,31 @@ export default function GameTablePage() {
     }, 350);
     return () => clearTimeout(t);
   }, [tableState]);
+
+  // Show win/loss overlay when round finishes — skip initial load snapshot
+  useEffect(() => {
+    const currentPhase = tableState?.phase;
+    const prev = prevPhaseRef.current;
+    prevPhaseRef.current = currentPhase;
+
+    // Only show overlay when transitioning INTO "finished", not on initial load
+    if (currentPhase !== "finished" || prev === "finished" || prev === undefined) return;
+    if (!tableState?.message) return;
+
+    const msg = tableState.message;
+    const labelMap: Record<string, string> = {
+      win: "Wygrana!", loss: "Przegrana", draw: "Remis",
+      player_bust: "Fura!", dealer_bust: "Krupier ma furę!",
+    };
+    const mySeat = tableState.seats?.find((s) => s.seat_index === mySeatIndex);
+    const net = (mySeat?.payout ?? 0) - (mySeat?.bet ?? 0);
+    const amountStr = net > 0 ? `+${net} Ż` : net < 0 ? `${net} Ż` : "Remis";
+    const type = net > 0 ? "win" : net < 0 ? "loss" : "draw";
+
+    setRoundResult({ label: labelMap[msg] ?? msg, amount: amountStr, type });
+    const t = setTimeout(() => setRoundResult(null), 2600);
+    return () => clearTimeout(t);
+  }, [tableState?.phase, tableState?.message]);
 
   function handlePlaceBet() {
     resetDeal();
@@ -194,6 +221,18 @@ export default function GameTablePage() {
 
   return (
     <div className="game-room">
+      {roundResult && (
+        <div className="round-result-overlay">
+          <div className="round-result-card">
+            <div className={`round-result-card__label round-result-card__label--${roundResult.type}`}>
+              {roundResult.label}
+            </div>
+            <div className={`round-result-card__amount round-result-card__amount--${roundResult.type}`}>
+              {roundResult.amount}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="game-room-topbar container">
         <div>
           <Link to="/stoły" className="back-link">← Stoły na żywo</Link>

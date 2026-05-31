@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.db.models import GameSession, GameType, Round, RoundResult, TransactionType, User
+from app.db.models import GameSession, Round, RoundResult, TransactionType, User
 from app.engine.poker import (
     PokerAction,
     PokerPhase,
@@ -101,7 +101,10 @@ class PokerRoundService:
 
         lobby = await load_table_lobby(self.redis, table_id)
         real_occ = [s for s in lobby.seats if s is not None and not s.is_bot]
-        if any(s.user_id == user_id for s in real_occ if lobby.seats[seat_index] is None or lobby.seats[seat_index].user_id != user_id):
+        seat_free_or_other = (
+            lobby.seats[seat_index] is None or lobby.seats[seat_index].user_id != user_id
+        )
+        if any(s.user_id == user_id for s in real_occ if seat_free_or_other):
             pass  # allow re-sit
 
         # Remove old seat for this user
@@ -140,7 +143,10 @@ class PokerRoundService:
             raise ValueError("not_seated")
 
         existing = await load_poker_state(self.redis, table_id)
-        if existing is not None and existing.phase not in (PokerPhase.showdown, PokerPhase.finished):
+        if existing is not None and existing.phase not in (
+            PokerPhase.showdown,
+            PokerPhase.finished,
+        ):
             raise ValueError("hand_in_progress")
 
         gs = await self._get_session_owned(game_session_id, user_id)
@@ -255,7 +261,9 @@ class PokerRoundService:
             out["round_in_progress"] = False
             return out, seat_events
 
-        updated = RedisPokerState.from_poker(table_id, loaded.session_id, user_id, st, loaded.bot_count)
+        updated = RedisPokerState.from_poker(
+            table_id, loaded.session_id, user_id, st, loaded.bot_count
+        )
         await save_poker_state(self.redis, updated, settings.table_state_ttl_seconds)
         await self.session.commit()
         out = st.to_public_dict(table_phase="playing")

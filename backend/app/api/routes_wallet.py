@@ -1,10 +1,11 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
 from app.api.dto import DepositRequest, WalletResponse
+from app.core.limiter import limiter
 from app.db.models import TransactionType, User
 from app.services.wallet import WalletService
 
@@ -12,7 +13,9 @@ router = APIRouter()
 
 
 @router.get("/me", response_model=WalletResponse)
+@limiter.limit("60/minute")
 async def wallet_me(
+    request: Request,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> WalletResponse:
@@ -24,7 +27,9 @@ async def wallet_me(
 
 
 @router.post("/deposit", response_model=WalletResponse)
+@limiter.limit("20/minute")
 async def deposit(
+    request: Request,
     body: DepositRequest,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],

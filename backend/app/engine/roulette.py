@@ -3,11 +3,15 @@ from __future__ import annotations
 
 import enum
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # European roulette colour layout
-RED_NUMBERS: frozenset[int] = frozenset({1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36})
-BLACK_NUMBERS: frozenset[int] = frozenset({2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35})
+RED_NUMBERS: frozenset[int] = frozenset(
+    {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
+)
+BLACK_NUMBERS: frozenset[int] = frozenset(
+    {2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35}
+)
 
 # Physical wheel order (European wheel sequence)
 WHEEL_ORDER = [
@@ -72,7 +76,8 @@ class RouletteBet:
     amount: float
     number: int | None = None          # for straight
     numbers: list[int] | None = None   # for split/street/corner
-    choice: str | None = None          # "red"/"black", "odd"/"even", "low"/"high", "1st"/"2nd"/"3rd"
+    # "red"/"black", "odd"/"even", "low"/"high", "1st"/"2nd"/"3rd"
+    choice: str | None = None
 
 
 def spin(rng: random.Random | None = None) -> int:

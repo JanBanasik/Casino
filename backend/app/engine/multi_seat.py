@@ -13,7 +13,6 @@ from app.engine.blackjack import (
     hand_value,
     is_bust,
     play_dealer,
-    settle,
 )
 
 BOT_PROFILES = [
@@ -274,17 +273,6 @@ def apply_seat_action(
 
 
 def _settle_seat_vs_dealer(seat: SeatState, dealer_hand: list[str], bet: float) -> None:
-    tmp = type(
-        "Tmp",
-        (),
-        {
-            "player_hand": seat.hand,
-            "dealer_hand": dealer_hand,
-            "bet": bet,
-            "message": None,
-            "phase": BlackjackPhase.finished,
-        },
-    )()
     if seat.status == SeatStatus.bust:
         seat.result = "loss"
         seat.payout = 0.0
@@ -374,7 +362,10 @@ def advance_one_bot(
     state: MultiSeatBlackjackState,
     policy,
 ) -> tuple[int, BlackjackAction] | None:
-    """Advance exactly ONE bot seat. Returns (seat_idx, action) or None if it's human's turn / done."""
+    """Advance exactly ONE bot seat.
+
+    Returns (seat_idx, action) or None if it's the human's turn / round is done.
+    """
     if state.phase != BlackjackPhase.player_turn or state.active_seat_index is None:
         return None
     seat = state.seats[state.active_seat_index]
