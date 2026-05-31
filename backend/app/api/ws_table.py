@@ -118,6 +118,33 @@ async def _run_deal_sequence(
     # 4. If we get here, it's the human's turn — nothing more to send
 
 
+async def _resume_round(
+    websocket: WebSocket,
+    svc,
+    user_id,
+    table_id: str,
+) -> None:
+    """After a human action, auto-play any remaining bot seats then the dealer.
+
+    Handles bots seated *after* the human (which would otherwise stall the
+    round) and applies uniformly to hit/stand/double — a double simply ends the
+    human's turn like a stand.
+    """
+    while True:
+        result = await svc.advance_next_bot_step(user_id, table_id)
+        if result is None:
+            break  # human's turn again, or no longer player_turn
+        event, public, _ = result
+        await websocket.send_json({"type": "seat_action", "payload": event})
+        await asyncio.sleep(1.4)
+        await websocket.send_json({"type": "state", "payload": public})
+        if not public.get("round_in_progress", True):
+            return  # round already settled during bot play
+    # Run the dealer if we've reached the dealer turn (no-op while still
+    # the human's turn — dealer_step returns None unless phase == dealer_turn).
+    await _run_dealer_sequence(websocket, svc, user_id, table_id)
+
+
 async def _run_dealer_sequence(
     websocket: WebSocket,
     svc,
@@ -200,16 +227,11 @@ async def table_ws(websocket: WebSocket, table_id: str) -> None:
                                 public["retention"] = retention
                             # Send human's action result immediately
                             await _emit_seat_actions(websocket, seat_events, public)
-                            # If dealer turn just started, run dealer sequence
-                            phase = public.get("phase")
+                            # Then resume remaining bots and the dealer, unless
+                            # apply_player_action already settled the round.
                             in_progress = public.get("round_in_progress", True)
-                            already_settled = (
-                                phase in ("dealer_turn", "finished") and not in_progress
-                            )
-                            if already_settled:
-                                pass  # already settled in apply_player_action
-                            elif phase == "dealer_turn":
-                                await _run_dealer_sequence(websocket, svc, user_id, table_id)
+                            if in_progress and public.get("phase") != "finished":
+                                await _resume_round(websocket, svc, user_id, table_id)
                         case "pong":
                             pass  # heartbeat response — keep connection alive
                         case None:

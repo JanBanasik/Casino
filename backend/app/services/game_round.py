@@ -141,9 +141,9 @@ class GameRoundService:
         *,
         solo: bool = False,
         bot_count: int = 0,
-    ) -> tuple[RedisTableState, dict, int]:
+    ) -> tuple[RedisTableState, dict, int, int]:
         """Deal cards and save initial state WITHOUT advancing any bots yet.
-        Returns (redis_state, initial_public_dict, human_seat_index).
+        Returns (redis_state, initial_public_dict, human_seat_index, total_players).
         """
         lobby = await load_table_lobby(self.redis, table_id)
         seat_idx = self._lobby_seat_index(lobby, user_id)
@@ -230,11 +230,12 @@ class GameRoundService:
         )
         round_done = st.phase == BlackjackPhase.finished
 
+        bonus = None
         if round_done:
-            # NOTE: _finalize_round_db may grant a bad-beat bonus, but this bot-advance
-            # path does not surface it to the client (unlike apply_player_action).
-            # See backlog: propagate retention through advance_next_bot_step.
-            await self._finalize_round_db(
+            # _finalize_round_db may grant a bad-beat bonus when the round settles
+            # entirely during bot play; surface it on the public payload (mirrors
+            # dealer_step / apply_player_action) so the WS layer can emit it.
+            bonus = await self._finalize_round_db(
                 st, loaded.session_id, user_id, table_id, WalletService(self.session)
             )
             await self.redis.delete(f"table:{table_id}:state")
@@ -251,6 +252,8 @@ class GameRoundService:
         public["lobby_seats"] = lobby.with_ambient_bots(table_id).to_public()
         public["my_seat_index"] = self._lobby_seat_index(lobby, user_id)
         public["round_in_progress"] = not round_done
+        if bonus:
+            public["retention"] = bonus
 
         return event, public, is_human_next or round_done
 
@@ -429,6 +432,35 @@ class GameRoundService:
             human_seat = st.seats[human_idx]
             if human_seat.occupant_id != str(user_id):
                 raise ValueError("forbidden")
+
+            # Extra stake before the engine mutates bets (double / split).
+            if action in (BlackjackAction.double, BlackjackAction.split):
+                if action == BlackjackAction.split:
+                    if human_seat.has_split or len(human_seat.hand) != 2:
+                        raise ValueError("split_not_allowed")
+                    extra = human_seat.bet
+                else:
+                    active = (
+                        human_seat.hand_bets[human_seat.active_hand_index]
+                        if human_seat.has_split
+                        else human_seat.bet
+                    )
+                    active_hand = (
+                        human_seat.hand
+                        if not human_seat.has_split
+                        else human_seat.hands[human_seat.active_hand_index]
+                    )
+                    if len(active_hand) != 2:
+                        raise ValueError("double_not_allowed")
+                    extra = active
+                wallet_svc = WalletService(self.session)
+                wallet = await wallet_svc.get_wallet_for_user(user_id)
+                if wallet is None:
+                    raise ValueError("no_wallet")
+                if wallet.balance < extra:
+                    raise ValueError("insufficient_balance")
+                await wallet_svc.apply_amount(wallet.id, -extra, TransactionType.bet)
+
             apply_seat_action(st, human_idx, action)
             seat_events.append({
                 "seat_index": human_idx,

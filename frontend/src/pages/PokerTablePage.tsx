@@ -1,7 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import ConfettiBurst from "../components/ConfettiBurst";
 import PlayingCard from "../components/PlayingCard";
+import SoundToggle from "../components/SoundToggle";
 import { avatarColor, seatPosition } from "../data/games";
+import { useCountUp } from "../hooks/useCountUp";
+import { sound } from "../lib/sound";
 import { useAuth } from "../hooks/useAuth";
 import { usePokerSocket } from "../hooks/usePokerSocket";
 import { createPokerSession, getWallet } from "../services/api";
@@ -29,7 +33,24 @@ function phaseLabel(phase: string): string {
   return map[phase] ?? phase;
 }
 
-function handResultLabel(result: string | null): string {
+const POKER_BUY_INS = [50, 100, 250, 500];
+
+function PokerPotDisplay({ pot }: { pot: number }) {
+  const animated = Math.round(useCountUp(pot, pot, 500, true));
+  return <div className="poker-pot-display">Pula: {animated.toLocaleString("pl-PL")} Ż</div>;
+}
+
+function mapPokerError(code: string): string {
+  const map: Record<string, string> = {
+    insufficient_balance: "Niewystarczające saldo na buy-in.",
+    not_seated: "Najpierw zajmij miejsce przy stole.",
+    hand_in_progress: "Rozdanie już trwa.",
+    no_active_hand: "Brak aktywnego rozdania.",
+  };
+  return map[code] ?? code;
+}
+
+function handResultLabel(result: string | null | undefined): string {
   if (!result) return "";
   const map: Record<string, string> = {
     win: "Wygrana!",
@@ -60,9 +81,12 @@ export default function PokerTablePage() {
   const { token } = useAuth();
   const navigate = useNavigate();
   const [balance, setBalance] = useState(0);
+  const [buyIn, setBuyIn] = useState(100);
   const [raiseAmount, setRaiseAmount] = useState(0);
   const [sessionId, setSessionId] = useState<string | null>(urlSessionId ?? null);
   const [connecting, setConnecting] = useState(false);
+  const [confettiKey, setConfettiKey] = useState(0);
+  const [bigWin, setBigWin] = useState(false);
 
   const {
     statusLabel,
@@ -110,6 +134,11 @@ export default function PokerTablePage() {
   }, [pokerState]);
 
   useEffect(() => {
+    const affordable = [...POKER_BUY_INS].reverse().find((b) => b <= balance) ?? POKER_BUY_INS[0];
+    setBuyIn(affordable);
+  }, [balance]);
+
+  useEffect(() => {
     if (pokerState) {
       const minRaise = pokerState.min_raise ?? pokerState.big_blind * 2;
       setRaiseAmount(minRaise);
@@ -134,12 +163,56 @@ export default function PokerTablePage() {
     : phase === "river" || phase === "showdown" || phase === "finished" ? 5
     : 0;
 
+  const canStartHand =
+    !pokerState?.round_in_progress &&
+    (phase === "waiting" || phase === "finished" || pokerState?.table_phase === "idle");
+  const affordableBuyIns = POKER_BUY_INS.filter((b) => b <= balance);
   const isMyTurn =
     pokerState?.active_seat_index !== null &&
     pokerState?.active_seat_index === mySeatIndex;
   const mySeat = seats.find((s) => s.seat_index === mySeatIndex);
-  const canCheck = isMyTurn && pokerState && pokerState.current_bet === 0;
+  const canCheck = isMyTurn && mySeat != null && mySeat.bet_phase >= (pokerState?.current_bet ?? 0);
   const callAmount = pokerState?.current_bet ?? 0;
+  const minRaise = pokerState?.min_raise ?? (pokerState?.big_blind ?? 10) * 2;
+  const pot = pokerState?.pot ?? 0;
+  const myChips = mySeat?.chips ?? 0;
+  const toCall = Math.max(0, callAmount - (mySeat?.bet_phase ?? 0));
+  const maxRaise = (mySeat?.bet_phase ?? 0) + myChips;
+  const raiseStep = pokerState?.big_blind ?? 10;
+
+  // Card-flip cue as the board advances (flop → turn → river).
+  const prevRevealedRef = useRef(0);
+  useEffect(() => {
+    if (revealedCount > prevRevealedRef.current) sound.play("flip");
+    prevRevealedRef.current = revealedCount;
+  }, [revealedCount]);
+
+  // Win/lose chime when the hand resolves.
+  const prevPokerPhaseRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const prev = prevPokerPhaseRef.current;
+    prevPokerPhaseRef.current = phase;
+    if (phase !== "finished" || prev === "finished" || prev === undefined) return;
+    const mine = seats.find((s) => s.seat_index === mySeatIndex);
+    if (mine?.result === "win") {
+      const big = (mine.payout ?? 0) >= (pokerState?.big_blind ?? 10) * 20;
+      sound.play(big ? "bigwin" : "win");
+      setBigWin(big);
+      setConfettiKey((k) => k + 1);
+    } else if (mine?.result === "loss") {
+      sound.play("lose");
+    }
+  }, [phase, seats, mySeatIndex, pokerState?.big_blind]);
+
+  function setRaisePreset(kind: "min" | "half_pot" | "pot" | "all_in") {
+    if (!pokerState || !mySeat) return;
+    let target = minRaise;
+    if (kind === "half_pot") target = Math.max(minRaise, pot * 0.5 + callAmount);
+    if (kind === "pot") target = Math.max(minRaise, pot + callAmount);
+    if (kind === "all_in") target = mySeat.bet_phase + myChips;
+    target = Math.min(target, mySeat.bet_phase + myChips);
+    setRaiseAmount(Math.round(target));
+  }
 
   function renderSeat(seat: PokerSeatPayload, posIdx: number) {
     const pos = POKER_SEAT_POSITIONS[posIdx] ?? seatPosition(posIdx);
@@ -150,6 +223,7 @@ export default function PokerTablePage() {
     const isBB = pokerState && posIdx === ((pokerState.dealer_seat_index + 2) % seats.length);
     const initials = isHuman ? "TY" : seat.display_name.slice(0, 2).toUpperCase();
     const folded = seat.status === "folded";
+    const isShowdown = phase === "showdown" || phase === "finished";
 
     return (
       <div
@@ -185,7 +259,7 @@ export default function PokerTablePage() {
           <span className="poker-seat-bet">{seat.bet_total} Ż</span>
         )}
 
-        {/* Hole cards */}
+        {/* Hole cards — bots' cards flip face-up at showdown */}
         {seat.hole_cards.length > 0 && (
           <div className="poker-hole-cards">
             {seat.hole_cards.map((c, i) => (
@@ -193,6 +267,7 @@ export default function PokerTablePage() {
                 key={`poker-hole-${seat.seat_index}-${i}`}
                 card={c === "??" ? "" : c}
                 hidden={c === "??"}
+                revealing={isShowdown && !isHuman && c !== "??"}
                 compact
               />
             ))}
@@ -201,7 +276,9 @@ export default function PokerTablePage() {
 
         {/* Showdown result */}
         {(phase === "showdown" || phase === "finished") && seat.result && (
-          <span className={`seat-bet seat-bet--${seat.result === "win" ? "win" : seat.result === "fold" ? "fold" : "loss"}`}>
+          <span
+            className={`seat-bet seat-bet--${seat.result === "win" ? "win" : seat.result === "fold" ? "fold" : "loss"} ${seat.result === "win" ? "poker-result-flourish" : ""}`}
+          >
             {handResultLabel(seat.result)}
           </span>
         )}
@@ -219,11 +296,12 @@ export default function PokerTablePage() {
 
   return (
     <div className="poker-page">
+      <ConfettiBurst fireKey={confettiKey} big={bigWin} />
       <div className="container">
         <div className="game-room-topbar">
           <div>
             <Link to="/stoły" className="back-link">← Stoły na żywo</Link>
-            <h1 style={{ fontFamily: "var(--font-display)", margin: "0.25rem 0 0", fontSize: "1.75rem" }}>Texas Hold'em</h1>
+            <h1>Texas Hold'em</h1>
             <p className="table-subtitle">
               Do {botCount + 1} graczy · Blindy: {pokerState?.small_blind ?? 5}/{pokerState?.big_blind ?? 10} Ż
             </p>
@@ -237,15 +315,18 @@ export default function PokerTablePage() {
               <span>Status</span>
               <strong>{statusLabel}</strong>
             </div>
+            <SoundToggle />
             <Link to="/stoły" className="btn btn-ghost btn-sm leave-table-btn">
               Opuść stół
             </Link>
           </div>
         </div>
 
-        {/* Phase banner */}
+        {/* Phase banner — re-animates on each phase change */}
         <div style={{ textAlign: "center", marginBottom: "1rem" }}>
-          <span className="poker-phase-banner">{phaseLabel(phase)}</span>
+          <span key={phase} className="poker-phase-banner poker-phase-banner--enter">
+            {phaseLabel(phase)}
+          </span>
         </div>
 
         {/* Poker table */}
@@ -258,8 +339,16 @@ export default function PokerTablePage() {
             {Array.from({ length: 5 }).map((_, i) => {
               const card = communityCards[i];
               if (card) {
+                // Flop cards (0-2) cascade in; turn/river flip immediately.
+                const delay = i < 3 ? i * 0.13 : 0;
                 return (
-                  <PlayingCard key={`community-${i}`} card={card} />
+                  <div
+                    key={`community-${i}`}
+                    className="poker-community-card poker-community-card--reveal"
+                    style={{ animationDelay: `${delay}s` }}
+                  >
+                    <PlayingCard card={card} />
+                  </div>
                 );
               }
               if (i < revealedCount) {
@@ -272,11 +361,7 @@ export default function PokerTablePage() {
           </div>
 
           {/* Pot */}
-          {(pokerState?.pot ?? 0) > 0 && (
-            <div className="poker-pot-display">
-              Pula: {pokerState!.pot.toLocaleString("pl-PL")} Ż
-            </div>
-          )}
+          {(pokerState?.pot ?? 0) > 0 && <PokerPotDisplay pot={pokerState!.pot} />}
 
           {/* Seats */}
           {seats.map((seat, idx) => renderSeat(seat, idx))}
@@ -285,56 +370,146 @@ export default function PokerTablePage() {
         {/* Action panel — only shown on human's turn */}
         {isSeated && isMyTurn && mySeat?.status !== "folded" && (
           <div className="poker-action-panel">
-            <span className="panel-label">Twoja kolej — {mySeat?.chips ?? 0} Ż</span>
-            <button type="button" className="btn btn-action btn-action--stand" onClick={fold}>
+            <span className="panel-label">
+              Twoja kolej — {mySeat?.chips ?? 0} Ż
+              {toCall > 0 && ` · do wyrównania: ${toCall} Ż`}
+            </span>
+            <button
+              type="button"
+              className="btn btn-action btn-action--stand"
+              onClick={() => {
+                sound.play("fold");
+                fold();
+              }}
+            >
               Pas (Fold)
             </button>
             {canCheck ? (
-              <button type="button" className="btn btn-action" onClick={check}>
+              <button
+                type="button"
+                className="btn btn-action"
+                onClick={() => {
+                  sound.play("check");
+                  check();
+                }}
+              >
                 Sprawdź (Check)
               </button>
             ) : (
-              <button type="button" className="btn btn-action" onClick={call}>
-                Wyrównaj {callAmount} Ż
+              <button
+                type="button"
+                className="btn btn-action"
+                onClick={() => {
+                  sound.play("chip");
+                  call();
+                }}
+              >
+                Wyrównaj {toCall > 0 ? toCall : callAmount} Ż
               </button>
             )}
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <input
-                type="number"
-                className="poker-raise-input"
-                value={raiseAmount}
-                min={pokerState?.min_raise ?? 0}
-                max={mySeat?.chips ?? 0}
-                onChange={(e) => setRaiseAmount(Number(e.target.value))}
-              />
+            <div className="poker-raise-row">
+              <div className="poker-raise-presets">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRaisePreset("min")}>
+                  Min {minRaise} Ż
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRaisePreset("half_pot")}>
+                  ½ puli
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRaisePreset("pot")}>
+                  Pula
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRaisePreset("all_in")}>
+                  All-in
+                </button>
+              </div>
+              <div className="poker-raise-stepper">
+                <button
+                  type="button"
+                  className="poker-raise-step"
+                  aria-label="Zmniejsz stawkę"
+                  onClick={() => {
+                    sound.play("click");
+                    setRaiseAmount((v) => Math.max(minRaise, v - raiseStep));
+                  }}
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  className="poker-raise-input"
+                  value={raiseAmount}
+                  min={minRaise}
+                  max={maxRaise}
+                  onChange={(e) =>
+                    setRaiseAmount(
+                      Math.max(minRaise, Math.min(maxRaise, Number(e.target.value) || minRaise)),
+                    )
+                  }
+                />
+                <button
+                  type="button"
+                  className="poker-raise-step"
+                  aria-label="Zwiększ stawkę"
+                  onClick={() => {
+                    sound.play("click");
+                    setRaiseAmount((v) => Math.min(maxRaise, v + raiseStep));
+                  }}
+                >
+                  +
+                </button>
+              </div>
               <button
                 type="button"
                 className="btn btn-gold"
-                onClick={() => raise(raiseAmount)}
-                disabled={raiseAmount < (pokerState?.min_raise ?? 0)}
+                onClick={() => {
+                  sound.play("raise");
+                  raise(raiseAmount);
+                }}
+                disabled={raiseAmount < minRaise}
               >
-                Podbij
+                Podbij do {raiseAmount} Ż
               </button>
             </div>
           </div>
         )}
 
         {/* Start hand button when waiting */}
-        {!pokerState?.round_in_progress && phase === "waiting" && (
+        {canStartHand && (
           <div className="poker-action-panel">
             {!isSeated ? (
               <p style={{ color: "var(--text-muted)", margin: 0 }}>
                 Dołącz do stołu — wybierz miejsce
               </p>
+            ) : affordableBuyIns.length === 0 ? (
+              <p style={{ color: "#ef4444", margin: 0 }}>
+                Potrzebujesz co najmniej {POKER_BUY_INS[0]} Ż, aby rozpocząć grę (masz {balance} Ż).
+              </p>
             ) : (
               <>
-                <span className="panel-label">Gotowy do gry</span>
+                <span className="panel-label">Wybierz buy-in i rozpocznij rozdanie</span>
+                <div className="poker-buyin-chips">
+                  {POKER_BUY_INS.map((amount) => (
+                    <button
+                      key={amount}
+                      type="button"
+                      className={`casino-chip ${buyIn === amount ? "casino-chip--active" : ""}`}
+                      disabled={amount > balance}
+                      onClick={() => setBuyIn(amount)}
+                    >
+                      {amount}
+                    </button>
+                  ))}
+                </div>
                 <button
                   type="button"
                   className="btn btn-gold btn-lg"
-                  onClick={() => startHand(500, botCount)}
+                  onClick={() => {
+                    sound.play("chip");
+                    startHand(buyIn, botCount);
+                  }}
+                  disabled={buyIn > balance || statusLabel !== "Stół na żywo"}
                 >
-                  Rozpocznij rozdanie
+                  Rozpocznij ({buyIn} Ż)
                 </button>
               </>
             )}
@@ -350,7 +525,7 @@ export default function PokerTablePage() {
 
         {error && (
           <p className="form-error" style={{ textAlign: "center", marginTop: "0.75rem" }}>
-            {error}
+            {mapPokerError(error)}
           </p>
         )}
       </div>

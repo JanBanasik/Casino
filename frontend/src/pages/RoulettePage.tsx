@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import ConfettiBurst from "../components/ConfettiBurst";
+import SoundToggle from "../components/SoundToggle";
+import { sound } from "../lib/sound";
+import { useCountUp } from "../hooks/useCountUp";
 import { useAuth } from "../hooks/useAuth";
 import { createRouletteSession, getWallet, rouletteSpin } from "../services/api";
 import type { RouletteBetRequest } from "../services/api";
@@ -23,6 +27,19 @@ const WHEEL_ORDER = [
 
 const CHIP_VALUES = [5, 10, 25, 50, 100, 500];
 
+const BET_TYPE_LABELS: Record<string, string> = {
+  straight: "Numer",
+  red_black: "Czerwone / Czarne",
+  odd_even: "Parzyste / Nieparzyste",
+  low_high: "1–18 / 19–36",
+  dozen: "Tuzin",
+  column: "Kolumna",
+};
+
+function formatBetTypeLabel(betType: string): string {
+  return BET_TYPE_LABELS[betType] ?? betType.replace(/_/g, " ");
+}
+
 interface Bet {
   position: string;
   betType: string;
@@ -42,6 +59,17 @@ const GRID_ROWS = [
   [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34],
 ];
 
+function RouletteNetHeadline({ net, runKey }: { net: number; runKey: unknown }) {
+  const animated = Math.round(useCountUp(Math.abs(net), runKey));
+  return (
+    <>
+      {net >= 0
+        ? `Wygrałeś ${animated.toLocaleString("pl-PL")} Ż!`
+        : `Przegrano ${animated.toLocaleString("pl-PL")} Ż`}
+    </>
+  );
+}
+
 export default function RoulettePage() {
   const { token } = useAuth();
   const navigate = useNavigate();
@@ -55,6 +83,9 @@ export default function RoulettePage() {
   const [spinResult, setSpinResult] = useState<RouletteSpinResult | null>(null);
   const [resultVisible, setResultVisible] = useState(false);
   const [winningNumber, setWinningNumber] = useState<number | null>(null);
+  const [confettiKey, setConfettiKey] = useState(0);
+  const [settleKey, setSettleKey] = useState(0);
+  const [bigWin, setBigWin] = useState(false);
   const wheelRef = useRef<HTMLDivElement>(null);
   const currentDegRef = useRef(0);
 
@@ -74,6 +105,7 @@ export default function RoulettePage() {
 
   function placeBet(position: string, betType: string, label: string, number?: number, choice?: string) {
     if (spinning) return;
+    sound.play("chip");
     setBets((prev) => {
       const existing = prev.findIndex((b) => b.position === position);
       if (existing >= 0) {
@@ -103,6 +135,7 @@ export default function RoulettePage() {
     setResultVisible(false);
     setSpinResult(null);
     setWinningNumber(null);
+    const stopSpin = sound.startSpin();
 
     try {
       const betRequests: RouletteBetRequest[] = bets.map((b) => ({
@@ -127,13 +160,25 @@ export default function RoulettePage() {
 
       // After animation (4s), show result
       setTimeout(() => {
+        stopSpin();
+        sound.play("ballSettle");
+        setSettleKey((k) => k + 1);
         setWinningNumber(result.result);
         setSpinResult(result);
         setResultVisible(true);
         setBalance(result.new_balance);
         setSpinning(false);
+        if (result.net > 0) {
+          const big = result.net >= totalBet * 5;
+          sound.play(big ? "bigwin" : "win");
+          setBigWin(big);
+          setConfettiKey((k) => k + 1);
+        } else if (result.net < 0) {
+          sound.play("lose");
+        }
       }, 4200);
-    } catch (e) {
+    } catch {
+      stopSpin();
       setSpinning(false);
     }
   }
@@ -154,13 +199,12 @@ export default function RoulettePage() {
 
   return (
     <div className="roulette-page">
+      <ConfettiBurst fireKey={confettiKey} big={bigWin} />
       <div className="container">
         <div className="game-room-topbar">
           <div>
             <Link to="/stoły" className="back-link">← Stoły na żywo</Link>
-            <h1 style={{ fontFamily: "var(--font-display)", margin: "0.25rem 0 0", fontSize: "1.75rem" }}>
-              Ruletka Europejska
-            </h1>
+            <h1>Ruletka Europejska</h1>
             <p className="table-subtitle">37 numerów · Min. zakład: 5 Ż</p>
           </div>
           <div className="game-room-stats">
@@ -174,6 +218,7 @@ export default function RoulettePage() {
                 {totalBet} Ż
               </strong>
             </div>
+            <SoundToggle />
           </div>
         </div>
 
@@ -226,7 +271,10 @@ export default function RoulettePage() {
                 );
               })}
             </svg>
-            <div className="roulette-ball-marker" />
+            <div
+              key={settleKey}
+              className={`roulette-ball-marker ${settleKey > 0 ? "roulette-ball-marker--settle" : ""}`}
+            />
           </div>
 
           <div className="roulette-result-display">
@@ -396,9 +444,7 @@ export default function RoulettePage() {
           <div
             className={`roulette-payout-toast ${spinResult.net >= 0 ? "roulette-payout-toast--win" : "roulette-payout-toast--loss"}`}
           >
-            {spinResult.net >= 0
-              ? `Wygrałeś ${spinResult.net.toLocaleString("pl-PL")} Ż!`
-              : `Przegrano ${Math.abs(spinResult.net).toLocaleString("pl-PL")} Ż`}
+            <RouletteNetHeadline net={spinResult.net} runKey={confettiKey + spinResult.result} />
 
             <div className="roulette-payout-list">
               {spinResult.payouts.map((p: RoulettePayoutItem, i: number) => (
@@ -406,8 +452,15 @@ export default function RoulettePage() {
                   key={i}
                   className={`roulette-payout-item ${p.won ? "roulette-payout-item--won" : "roulette-payout-item--lost"}`}
                 >
-                  <span>{p.bet_type}{p.won ? " ✓" : " ✗"}</span>
-                  <span>{p.won ? `+${p.payout}` : `-${p.amount}`} Ż</span>
+                  <span className="roulette-payout-item__label">
+                    {formatBetTypeLabel(p.bet_type)}
+                    <span className={`roulette-payout-item__badge ${p.won ? "roulette-payout-item__badge--won" : "roulette-payout-item__badge--lost"}`}>
+                      {p.won ? "Trafiony" : "Nietrafiony"}
+                    </span>
+                  </span>
+                  <span className="roulette-payout-item__amount">
+                    {p.won ? `+${p.payout}` : `−${p.amount}`} Ż
+                  </span>
                 </div>
               ))}
             </div>

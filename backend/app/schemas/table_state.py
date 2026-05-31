@@ -22,6 +22,13 @@ class SeatStateModel(BaseModel):
     status: SeatStatus = SeatStatus.waiting
     result: str | None = None
     payout: float = 0.0
+    has_split: bool = False
+    hands: list[list[str]] = Field(default_factory=list)
+    hand_bets: list[float] = Field(default_factory=list)
+    hand_statuses: list[SeatStatus] = Field(default_factory=list)
+    hand_results: list[str | None] = Field(default_factory=list)
+    hand_payouts: list[float] = Field(default_factory=list)
+    active_hand_index: int = 0
 
 
 class RedisTableState(BaseModel):
@@ -67,6 +74,13 @@ class RedisTableState(BaseModel):
                     status=s.status,
                     result=s.result,
                     payout=s.payout,
+                    has_split=s.has_split,
+                    hands=[list(h) for h in s.hands],
+                    hand_bets=list(s.hand_bets),
+                    hand_statuses=list(s.hand_statuses),
+                    hand_results=list(s.hand_results),
+                    hand_payouts=list(s.hand_payouts),
+                    active_hand_index=s.active_hand_index,
                 )
                 for s in st.seats
             ],
@@ -90,6 +104,13 @@ class RedisTableState(BaseModel):
                 status=s.status,
                 result=s.result,
                 payout=s.payout,
+                has_split=s.has_split,
+                hands=[list(h) for h in s.hands],
+                hand_bets=list(s.hand_bets),
+                hand_statuses=list(s.hand_statuses),
+                hand_results=list(s.hand_results),
+                hand_payouts=list(s.hand_payouts),
+                active_hand_index=s.active_hand_index,
             )
             for s in self.seats
         ]
@@ -126,6 +147,10 @@ async def load_table_state(redis, table_id: str) -> RedisTableState | None:
     if "seats" in data:
         for seat in data["seats"]:
             seat["status"] = SeatStatus(seat["status"])
+            if seat.get("hand_statuses"):
+                seat["hand_statuses"] = [
+                    SeatStatus(s) if isinstance(s, str) else s for s in seat["hand_statuses"]
+                ]
     else:
         data["seats"] = [
             {
@@ -155,4 +180,8 @@ async def save_table_state(redis, state: RedisTableState, ttl_seconds: int) -> N
     payload["phase"] = state.phase.value
     for seat in payload["seats"]:
         seat["status"] = seat["status"] if isinstance(seat["status"], str) else seat["status"]
+        if seat.get("hand_statuses"):
+            seat["hand_statuses"] = [
+                s.value if hasattr(s, "value") else s for s in seat["hand_statuses"]
+            ]
     await redis.set(state.redis_key(), json.dumps(payload), ex=ttl_seconds)

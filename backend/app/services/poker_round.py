@@ -12,11 +12,11 @@ from app.db.models import GameSession, Round, RoundResult, TransactionType, User
 from app.engine.poker import (
     PokerAction,
     PokerPhase,
-    SimplePokerBotPolicy,
     advance_poker_bots,
     apply_poker_action,
     new_poker_round,
 )
+from app.ml_inference.poker_policies import make_poker_policy
 from app.schemas.poker_state import (
     RedisPokerState,
     load_poker_state,
@@ -25,7 +25,7 @@ from app.schemas.poker_state import (
 from app.schemas.table_lobby import TableLobby, load_table_lobby, save_table_lobby
 from app.services.wallet import WalletService
 
-_bot_policy = SimplePokerBotPolicy()
+_bot_policy = make_poker_policy()
 
 
 class PokerRoundService:
@@ -190,8 +190,10 @@ class PokerRoundService:
             await self.session.commit()
             display_lobby = lobby.with_ambient_bots(table_id)
             public = st.to_public_dict(table_phase="idle")
+            public["phase"] = "waiting"
             public["lobby_seats"] = display_lobby.to_public()
             public["my_seat_index"] = seat_idx
+            public["round_in_progress"] = False
             return None, public, seat_events
 
         redis_st = RedisPokerState.from_poker(table_id, game_session_id, user_id, st, bot_count)
@@ -222,7 +224,10 @@ class PokerRoundService:
 
         if st.phase in (PokerPhase.finished, PokerPhase.showdown):
             lobby = await load_table_lobby(self.redis, table_id)
-            return st.to_public_dict(table_phase="idle"), seat_events
+            out = st.to_public_dict(table_phase="idle")
+            out["phase"] = "waiting"
+            out["round_in_progress"] = False
+            return out, seat_events
 
         human_idx = st.human_seat_index
         if st.active_seat_index != human_idx:
@@ -256,6 +261,7 @@ class PokerRoundService:
             )
             await self.session.commit()
             out = st.to_public_dict(table_phase="idle")
+            out["phase"] = "waiting"
             out["lobby_seats"] = display_lobby.to_public()
             out["my_seat_index"] = self._lobby_seat_index(lobby, user_id)
             out["round_in_progress"] = False

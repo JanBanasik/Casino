@@ -19,6 +19,8 @@ class BlackjackPhase(str, enum.Enum):
 class BlackjackAction(str, enum.Enum):
     hit = "HIT"
     stand = "STAND"
+    double = "DOUBLE"
+    split = "SPLIT"
 
 
 @dataclass(slots=True)

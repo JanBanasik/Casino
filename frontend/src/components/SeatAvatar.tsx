@@ -15,6 +15,9 @@ interface SeatAvatarProps {
   isSelectable?: boolean;
   onSelect?: () => void;
   hand?: string[];
+  splitHands?: string[][];
+  activeHandIndex?: number;
+  handBets?: number[];
   bet?: number;
   result?: string | null;
   dealingCards?: Set<string>;
@@ -35,6 +38,9 @@ export default function SeatAvatar({
   isSelectable,
   onSelect,
   hand = [],
+  splitHands,
+  activeHandIndex = 0,
+  handBets,
   bet,
   result,
   dealingCards,
@@ -75,8 +81,49 @@ export default function SeatAvatar({
         {initials}
       </div>
       <span className="seat-name">{isHuman ? "Ty" : displayName}</span>
-      {bet !== undefined && bet > 0 && <span className="seat-bet">{bet} Ż</span>}
-      {hand.length > 0 && (
+      {bet !== undefined && bet > 0 && !splitHands?.length && (
+        <span className="seat-bet">{bet} Ż</span>
+      )}
+      {splitHands && splitHands.length > 0 ? (
+        <div className="seat-split-hands">
+          {splitHands.map((splitHand, hi) => {
+            const handActive = hi === activeHandIndex && isActive;
+            const handBet = handBets?.[hi];
+            const v = calcHandValue(splitHand);
+            const bust = v > 21;
+            const bj = v === 21 && splitHand.length === 2;
+            return (
+              <div
+                key={`split-${seatIndex}-${hi}`}
+                className={`seat-split-hand${handActive ? " seat-split-hand--active" : ""}`}
+              >
+                {handBet !== undefined && handBet > 0 && (
+                  <span className="seat-bet seat-bet--split">{handBet} Ż</span>
+                )}
+                <div className="seat-hand">
+                  {splitHand.map((c, i) => {
+                    const key = `seat-${seatIndex}-h${hi}-${i}`;
+                    return (
+                      <PlayingCard
+                        key={`${c}-${hi}-${i}`}
+                        card={c}
+                        compact={compact}
+                        pending={pendingCards?.has(key)}
+                        dealing={dealingCards?.has(key)}
+                        revealing={revealingCards?.has(key)}
+                        dealFrom={dealFrom}
+                      />
+                    );
+                  })}
+                </div>
+                <div className={`seat-hand-value${bust ? " seat-hand-value--bust" : bj ? " seat-hand-value--blackjack" : ""}`}>
+                  {bj ? "BJ!" : bust ? `${v} — fura` : v}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : hand.length > 0 ? (
         <>
           <div className="seat-hand">
             {hand.map((c, i) => {
@@ -105,7 +152,7 @@ export default function SeatAvatar({
             );
           })()}
         </>
-      )}
+      ) : null}
     </div>
   );
 }

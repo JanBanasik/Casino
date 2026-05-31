@@ -40,12 +40,16 @@ export default function TableLayout({
   ambientDealerHand = [],
   isAmbientDealing = false,
 }: TableLayoutProps) {
-  const dealerHand = tableState?.dealer_hand ?? [];
-  const hiddenCount = hideDealerHole ? (tableState?.dealer_hidden_count ?? 0) : 0;
-  const roundPlaying = tableState?.table_phase === "playing" || tableState?.round_in_progress;
+  const roundPlaying = Boolean(
+    tableState?.table_phase === "playing" || tableState?.round_in_progress,
+  );
+  const dealerHand = roundPlaying ? (tableState?.dealer_hand ?? []) : [];
+  const hiddenCount = roundPlaying && hideDealerHole ? (tableState?.dealer_hidden_count ?? 0) : 0;
 
   // Use ambient dealer hand when idle and no real game
-  const displayDealerHand = roundPlaying ? dealerHand : (ambientDealerHand.length > 0 ? ambientDealerHand : dealerHand);
+  const displayDealerHand = roundPlaying
+    ? dealerHand
+    : (ambientDealerHand.length > 0 ? ambientDealerHand : []);
 
   const gameSeatByIndex = new Map<number, SeatStatePayload>();
   seats.forEach((s) => gameSeatByIndex.set(s.seat_index, s));
@@ -169,8 +173,11 @@ export default function TableLayout({
                 isHuman={isHuman}
                 isActive={isActiveSeat}
                 isInactive={isInactiveSeat}
-                hand={gameSeat?.hand ?? []}
-                bet={gameSeat?.bet}
+                hand={roundPlaying ? (gameSeat?.hand ?? []) : []}
+                splitHands={roundPlaying && gameSeat?.has_split ? gameSeat.hands : undefined}
+                activeHandIndex={gameSeat?.active_hand_index}
+                handBets={gameSeat?.hand_bets}
+                bet={roundPlaying ? gameSeat?.bet : undefined}
                 result={gameSeat?.result}
                 dealingCards={dealingCards}
                 revealingCards={revealingCards}

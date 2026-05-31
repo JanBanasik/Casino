@@ -1,18 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import type { LobbySeatPayload } from "../types/api";
-import { PLAYER_NAMES, avatarColor } from "../data/games";
+import { avatarColor } from "../data/games";
 
-// Fake cards for ambient dealing
-const FAKE_CARDS = [
-  ["AS", "KH"],
-  ["7D", "QC"],
-  ["JH", "9S"],
-  ["3D", "AC"],
-  ["KC", "8H"],
-  ["2S", "6D"],
-];
+// Ambient dealing draws fresh random hands each round from a shuffled deck so the
+// idle table never shows the same cards twice in a row.
+const RANKS = ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"];
+const SUITS = ["C", "D", "H", "S"];
 
-const FAKE_DEALER_HAND = ["TH", "3S"];
+function drawAmbientDeal(seatCount: number): { dealer: string[]; hands: string[][] } {
+  const deck: string[] = [];
+  for (const r of RANKS) for (const s of SUITS) deck.push(`${r}${s}`);
+  // Fisher–Yates shuffle
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  let k = 0;
+  const dealer = [deck[k++], deck[k++]];
+  const hands: string[][] = [];
+  for (let s = 0; s < seatCount; s++) hands.push([deck[k++], deck[k++]]);
+  return { dealer, hands };
+}
 
 const AMBIENT_MIN_MS = 18000;   // min 18s between ambient rounds
 const AMBIENT_MAX_MS = 28000;   // max 28s
@@ -39,13 +47,14 @@ interface AmbientTableState {
 export function useAmbientTable(
   tableIdle: boolean,
   lobbySeats: (LobbySeatPayload | null)[],
+  solo = false,
 ): AmbientTableState {
   const [isAmbientDealing, setIsAmbientDealing] = useState(false);
   const [ambientDealerHand, setAmbientDealerHand] = useState<string[]>([]);
   const [ambientSeats, setAmbientSeats] = useState<AmbientSeat[]>([]);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Build bot seats from lobby data (exclude human seat or use generated bots)
+  // Build bot seats from lobby ambient occupants (decorative only, never in solo).
   const getBotSeats = (): AmbientSeat[] => {
     const filled: AmbientSeat[] = [];
     lobbySeats.forEach((seat, idx) => {
@@ -58,26 +67,11 @@ export function useAmbientTable(
         });
       }
     });
-
-    // If no lobby seats, generate some bots at fixed positions
-    if (filled.length === 0) {
-      const botPositions = [0, 1, 2, 4, 5];
-      botPositions.forEach((slotIdx, i) => {
-        const name = PLAYER_NAMES[i % PLAYER_NAMES.length];
-        filled.push({
-          seatIndex: slotIdx,
-          displayName: name,
-          avatarKey: name,
-          hand: [],
-        });
-      });
-    }
-
     return filled;
   };
 
   useEffect(() => {
-    if (!tableIdle) {
+    if (solo || !tableIdle) {
       // Clear ambient state when real game starts
       setIsAmbientDealing(false);
       setAmbientDealerHand([]);
@@ -88,14 +82,15 @@ export function useAmbientTable(
 
     function runAmbientRound() {
       const bots = getBotSeats();
+      const deal = drawAmbientDeal(bots.length);
 
-      // Deal fake cards
+      // Deal fresh random cards
       setIsAmbientDealing(true);
-      setAmbientDealerHand(FAKE_DEALER_HAND);
+      setAmbientDealerHand(deal.dealer);
       setAmbientSeats(
         bots.map((bot, i) => ({
           ...bot,
-          hand: FAKE_CARDS[i % FAKE_CARDS.length],
+          hand: deal.hands[i] ?? [],
         })),
       );
 
@@ -119,14 +114,14 @@ export function useAmbientTable(
       if (timerRef.current) clearTimeout(timerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableIdle]);
+  }, [tableIdle, solo]);
 
   // When lobby seats change (without tableIdle changing), rebuild ambient seats
   useEffect(() => {
-    if (!tableIdle || isAmbientDealing) return;
+    if (solo || !tableIdle || isAmbientDealing) return;
     setAmbientSeats(getBotSeats().map((bot) => ({ ...bot, hand: [] })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lobbySeats, tableIdle]);
+  }, [lobbySeats, tableIdle, solo]);
 
   return { ambientSeats, ambientDealerHand, isAmbientDealing };
 }

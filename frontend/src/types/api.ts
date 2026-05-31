@@ -8,6 +8,11 @@ export interface SeatStatePayload {
   status: string;
   result?: string | null;
   payout?: number;
+  has_split?: boolean;
+  hands?: string[][];
+  hand_bets?: number[];
+  active_hand_index?: number;
+  hand_results?: (string | null)[];
 }
 
 export interface LobbySeatPayload {
@@ -21,6 +26,8 @@ export interface TableStatePayload {
   table_phase?: string;
   phase: string;
   player_hand: string[];
+  player_hands?: string[][] | null;
+  active_hand_index?: number | null;
   dealer_hand: string[];
   dealer_hidden_count: number;
   bet: number;

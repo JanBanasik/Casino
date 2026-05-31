@@ -48,8 +48,11 @@ export default function LiveCasinoPage() {
     try {
       const session = await createSession("blackjack");
       const botCount = solo ? 0 : Math.max(0, table.seatsTaken - 1);
+      // Solo must NOT share a table_id with multiplayer/other solo players — a
+      // shared id inherits that table's ambient bots and leftover round state.
+      // Give each solo session its own private, single-use table.
       const params = new URLSearchParams({
-        table: table.id,
+        table: solo ? `solo-${session.id}` : table.id,
         ...(solo ? { solo: "1" } : { bots: String(botCount) }),
       });
       navigate(`/graj/${session.id}?${params.toString()}`, {
@@ -71,7 +74,8 @@ export default function LiveCasinoPage() {
     setJoiningId("solo");
     try {
       const session = await createSession("blackjack");
-      navigate(`/graj/${session.id}?table=default&solo=1`, {
+      // Private table per solo session (see handleJoin) — never the shared "default".
+      navigate(`/graj/${session.id}?table=solo-${session.id}&solo=1`, {
         state: { tableName: "Blackjack — Gra solo", minBet: 10 },
       });
     } catch (e) {

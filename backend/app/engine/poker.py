@@ -525,6 +525,8 @@ def _settle(state: PokerState) -> None:
 class SimplePokerBotPolicy:
     """Heuristic bot: pre-flop uses hole card strength; post-flop uses hand rank."""
 
+    name = "heuristic_poker"
+
     def choose_action(
         self,
         seat: PokerSeat,

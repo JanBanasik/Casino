@@ -167,6 +167,14 @@ export function useGameSocket(
     wsRef.current?.send(JSON.stringify({ type: "action", action: "STAND" }));
   }, []);
 
+  const double = useCallback(() => {
+    wsRef.current?.send(JSON.stringify({ type: "action", action: "DOUBLE" }));
+  }, []);
+
+  const split = useCallback(() => {
+    wsRef.current?.send(JSON.stringify({ type: "action", action: "SPLIT" }));
+  }, []);
+
   const statusLabel =
     status === "connected"
       ? "Stół na żywo"
@@ -190,5 +198,7 @@ export function useGameSocket(
     placeBet,
     hit,
     stand,
+    double,
+    split,
   };
 }
