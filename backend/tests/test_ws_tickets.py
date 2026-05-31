@@ -75,6 +75,9 @@ def test_auth_wallet_session_and_ws_ticket(client):
 @pytest.mark.integration
 def test_ws_auth_handshake_and_new_round(client):
     token = _register_and_login(client, _unique_user("ws2"))
+    # Unique table per run — the lobby is persisted in Redis with a long TTL,
+    # so a shared id would collide with seats left by earlier tests/runs.
+    table_id = f"table-{uuid.uuid4().hex[:8]}"
 
     client.post(
         "/api/wallet/deposit",
@@ -89,11 +92,11 @@ def test_ws_auth_handshake_and_new_round(client):
 
     ticket = client.post(
         f"/api/sessions/{session_id}/ws-ticket",
-        json={"table_id": "table-1"},
+        json={"table_id": table_id},
         headers={"Authorization": f"Bearer {token}"},
     ).json()["ticket"]
 
-    with client.websocket_connect("/ws/tables/table-1") as ws:
+    with client.websocket_connect(f"/ws/tables/{table_id}") as ws:
         ws.send_json({"type": "auth", "ticket": ticket})
         auth = ws.receive_json()
         assert auth["type"] == "auth_ok"
