@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.table_limits import validate_blackjack_bet
 from app.db.models import GameSession, GameType, Round, RoundResult, TransactionType, User
 from app.engine.blackjack import BlackjackAction, BlackjackPhase
 from app.engine.multi_seat import (
@@ -25,6 +26,7 @@ from app.ml_inference.registry import get_blackjack_policy
 from app.schemas.table_lobby import TableLobby, load_table_lobby, save_table_lobby  # noqa: F401
 from app.schemas.table_state import RedisTableState, load_table_state, save_table_state
 from app.services.bonus import BonusService
+from app.services.payouts import boost_credit
 from app.services.wallet import WalletService
 
 
@@ -140,6 +142,7 @@ class GameRoundService:
         solo: bool = False,
         bot_count: int = 0,
         difficulty: str = "medium",
+        min_bet: float = 0.0,
     ) -> tuple[RedisTableState, dict, int, int]:
         """Deal cards and save initial state WITHOUT advancing any bots yet.
         Returns (redis_state, initial_public_dict, human_seat_index, total_players).
@@ -158,6 +161,8 @@ class GameRoundService:
             raise ValueError("session_not_found")
         if gs.game_type != GameType.blackjack:
             raise ValueError("unsupported_game")
+
+        validate_blackjack_bet(table_id, bet, min_bet)
 
         if solo:
             bot_count = 0
@@ -237,7 +242,8 @@ class GameRoundService:
             # entirely during bot play; surface it on the public payload (mirrors
             # dealer_step / apply_player_action) so the WS layer can emit it.
             bonus = await self._finalize_round_db(
-                st, loaded.session_id, user_id, table_id, WalletService(self.session)
+                st, loaded.session_id, user_id, table_id,
+                WalletService(self.session), loaded.difficulty,
             )
             await self.redis.delete(f"table:{table_id}:state")
             await self.session.commit()
@@ -278,7 +284,8 @@ class GameRoundService:
         if done:
             finish_dealer_and_settle(st)
             bonus = await self._finalize_round_db(
-                st, loaded.session_id, user_id, table_id, WalletService(self.session)
+                st, loaded.session_id, user_id, table_id,
+                WalletService(self.session), loaded.difficulty,
             )
             await self.redis.delete(f"table:{table_id}:state")
             await self.session.commit()
@@ -313,6 +320,7 @@ class GameRoundService:
         solo: bool = False,
         bot_count: int = 0,
         difficulty: str = "medium",
+        min_bet: float = 0.0,
     ) -> tuple[RedisTableState | None, dict, list[dict]]:
         """Start a round when table is idle; requires seated player."""
         lobby = await load_table_lobby(self.redis, table_id)
@@ -333,6 +341,7 @@ class GameRoundService:
             bot_count=bot_count,
             human_seat_index=seat_idx,
             difficulty=difficulty,
+            min_bet=min_bet,
         )
 
     async def new_round(
@@ -346,6 +355,7 @@ class GameRoundService:
         bot_count: int = 0,
         human_seat_index: int = 3,
         difficulty: str = "medium",
+        min_bet: float = 0.0,
     ) -> tuple[RedisTableState | None, dict, list[dict]]:
         gs = await self._get_session_owned(game_session_id, user_id)
         if gs is None:
@@ -356,6 +366,8 @@ class GameRoundService:
         existing = await load_table_state(self.redis, table_id)
         if existing is not None and existing.phase != BlackjackPhase.finished:
             raise ValueError("round_in_progress")
+
+        validate_blackjack_bet(table_id, bet, min_bet)
 
         if solo:
             bot_count = 0
@@ -396,7 +408,7 @@ class GameRoundService:
         if st.phase == BlackjackPhase.finished:
             finish_dealer_and_settle(st)
             bonus = await self._finalize_round_db(
-                st, game_session_id, user_id, table_id, wallet_svc
+                st, game_session_id, user_id, table_id, wallet_svc, difficulty
             )
             await self.session.commit()
             public = st.to_public_dict(table_phase="idle")
@@ -482,7 +494,8 @@ class GameRoundService:
         bonus_meta: dict | None = None
         if st.phase == BlackjackPhase.finished:
             bonus_meta = await self._finalize_round_db(
-                st, loaded.session_id, user_id, table_id, WalletService(self.session)
+                st, loaded.session_id, user_id, table_id,
+                WalletService(self.session), loaded.difficulty,
             )
             await self.redis.delete(f"table:{table_id}:state")
             await self.session.commit()
@@ -517,17 +530,25 @@ class GameRoundService:
         user_id: UUID,
         table_id: str,
         wallet_svc: WalletService,
+        difficulty: str = "medium",
     ) -> dict | None:
         result_key, credit = human_settle_result(st)
         rr = RoundResult[result_key] if result_key in RoundResult.__members__ else RoundResult.draw
+
+        human = st.human_seat()
+        total_stake = sum(human.hand_bets) if human.has_split else human.bet
+        # Harder tables pay a higher multiplier on the winning profit. Reflect the
+        # final, rounded credit back onto the seat so the UI shows exactly what
+        # lands on the account (overlay reads seat.payout − seat.bet).
+        credit = boost_credit(credit, total_stake, difficulty)
+        human.payout = credit
+        human.bet = total_stake
+
         wallet = await wallet_svc.get_wallet_for_user(user_id)
         if wallet is None:
             raise ValueError("no_wallet")
         if credit > 0:
             await wallet_svc.apply_amount(wallet.id, credit, TransactionType.win)
-
-        human = st.human_seat()
-        total_stake = sum(human.hand_bets) if human.has_split else human.bet
 
         bot_actions = [
             {"seat": s.display_name, "result": s.result, "hand": s.hand}

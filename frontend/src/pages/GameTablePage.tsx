@@ -16,7 +16,7 @@ import { DifficultyBadge } from "../components/DifficultyPicker";
 import { useReportRoundActivity } from "../hooks/useGameActivity";
 import type { Difficulty, LobbySeatPayload, SeatStatePayload } from "../types/api";
 
-const CHIP_PRESETS = [10, 25, 50, 100, 500];
+const CHIP_PRESETS = [10, 25, 50, 100, 500, 1000];
 
 function cardRank(card: string): string {
   return card.slice(0, -1);
@@ -38,8 +38,19 @@ export default function GameTablePage() {
 
   const location = useLocation();
   const tableName = (location.state as { tableName?: string } | null)?.tableName;
-  const minBet = (location.state as { minBet?: number } | null)?.minBet ?? 10;
   const botCount = solo ? 0 : (Number.isNaN(botCountParam) ? 0 : botCountParam);
+
+  // Min/max stake resolved from the table itself (survives a page refresh via
+  // the URL) with the `min` query param and navigation state as fallbacks.
+  const tableMeta = LIVE_TABLES.find((t) => t.id === tableId);
+  const minParam = Number(searchParams.get("min"));
+  const stateMin = (location.state as { minBet?: number } | null)?.minBet;
+  const minBet =
+    tableMeta?.minBet ??
+    (Number.isFinite(minParam) && minParam > 0 ? minParam : undefined) ??
+    stateMin ??
+    10;
+  const maxBet = tableMeta?.maxBet ?? 10000;
 
   const { token } = useAuth();
   const navigate = useNavigate();
@@ -54,8 +65,6 @@ export default function GameTablePage() {
   const [confettiKey, setConfettiKey] = useState(0);
   const prevPhaseRef = useRef<string | undefined>(undefined);
 
-  const tableMeta = LIVE_TABLES.find((t) => t.id === tableId);
-
   const {
     status,
     statusLabel,
@@ -69,7 +78,7 @@ export default function GameTablePage() {
     stand,
     double,
     split,
-  } = useGameSocket(sessionId ?? null, tableId, solo, botCount, difficulty);
+  } = useGameSocket(sessionId ?? null, tableId, solo, botCount, difficulty, minBet);
 
   const { pendingCards, dealingCards, revealingCards, isDealing, resetDeal } = useDealAnimation(tableState);
 
@@ -190,9 +199,10 @@ export default function GameTablePage() {
   }, [lastSeatAction]);
 
   function handlePlaceBet() {
+    const stake = Math.min(Math.max(bet, minBet), maxBet);
     sound.play("chip");
     resetDeal();
-    placeBet(bet);
+    placeBet(stake);
   }
 
   function bannerContent(): { message: string; subMessage?: string; actions?: Parameters<typeof TableActionBanner>[0]["actions"] } {
@@ -209,14 +219,15 @@ export default function GameTablePage() {
       };
     }
     if (tableIdle) {
+      const betValid = bet >= minBet && bet <= maxBet && bet <= balance;
       return {
         message: "Postaw zakład, aby dołączyć do rundy",
-        subMessage: `Minimalny zakład: ${tableMeta?.minBet ?? minBet} Ż`,
+        subMessage: `Zakład: ${minBet}–${maxBet} Ż · składaj żetony, by podbić stawkę`,
         actions: [
           {
             label: `Graj za ${bet} Ż`,
             onClick: handlePlaceBet,
-            disabled: isDealing || statusLabel !== "Stół na żywo",
+            disabled: !betValid || isDealing || statusLabel !== "Stół na żywo",
             variant: "gold" as const,
           },
         ],
@@ -366,22 +377,37 @@ export default function GameTablePage() {
         />
 
         {isSeated && tableIdle && !waitingForRound && (
-          <div className="table-bet-chips">
-            {CHIP_PRESETS.filter(
-              (n) => n >= (tableMeta?.minBet ?? 1) && n <= (tableMeta?.maxBet ?? 10000),
-            ).map((n) => (
+          <div className="table-bet-controls">
+            <div className="table-bet-total">
+              Zakład: <strong>{bet.toLocaleString("pl-PL")} Ż</strong>
+            </div>
+            <div className="table-bet-chips">
+              {CHIP_PRESETS.filter((n) => n <= maxBet).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className="casino-chip"
+                  disabled={bet + n > Math.min(maxBet, balance)}
+                  onClick={() => {
+                    sound.play("chip");
+                    setBet((b) => Math.min(b + n, maxBet, balance));
+                  }}
+                >
+                  +{n}
+                </button>
+              ))}
               <button
-                key={n}
                 type="button"
-                className={`casino-chip ${bet === n ? "casino-chip--active" : ""}`}
+                className="btn btn-ghost btn-sm table-bet-clear"
+                disabled={bet === 0}
                 onClick={() => {
                   sound.play("chip");
-                  setBet(n);
+                  setBet(0);
                 }}
               >
-                {n}
+                Wyczyść
               </button>
-            ))}
+            </div>
           </div>
         )}
 
@@ -425,6 +451,8 @@ function mapError(code: string): string {
     round_in_progress: "Trwa runda — poczekaj na jej zakończenie.",
     insufficient_balance: "Niewystarczające saldo.",
     not_your_turn: "To nie twoja kolej.",
+    bet_below_minimum: "Zakład poniżej minimalnej stawki tego stołu.",
+    bet_above_maximum: "Zakład powyżej maksymalnej stawki tego stołu.",
     double_not_allowed: "Podwojenie możliwe tylko przy dwóch kartach.",
     double_only_initial: "Podwojenie możliwe tylko przy dwóch kartach.",
     split_not_allowed: "Split możliwy tylko przy parze na dwóch kartach.",

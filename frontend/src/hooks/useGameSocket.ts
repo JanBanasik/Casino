@@ -16,6 +16,7 @@ export function useGameSocket(
   solo = false,
   botCount = 0,
   difficulty = "medium",
+  minBet = 0,
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>("idle");
@@ -161,10 +162,11 @@ export function useGameSocket(
           solo,
           bot_count: solo ? 0 : botCount,
           difficulty,
+          min_bet: minBet,
         }),
       );
     },
-    [sessionId, solo, botCount, difficulty],
+    [sessionId, solo, botCount, difficulty, minBet],
   );
 
   const hit = useCallback(() => {

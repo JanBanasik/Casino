@@ -1,21 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { useDailyBonus, formatCountdown } from "../hooks/useDailyBonus";
 import {
   buyChips,
-  claimDaily,
   claimRescue,
-  getDailyStatus,
   getHistory,
   getPaymentConfig,
   getWallet,
   withdrawChips,
 } from "../services/api";
-import type {
-  DailyStatusResponse,
-  PaymentConfigResponse,
-  RoundHistoryItem,
-} from "../types/api";
+import type { PaymentConfigResponse, RoundHistoryItem } from "../types/api";
 
 const CHIP_PACKS = [250, 500, 1000, 2500, 5000];
 
@@ -43,9 +38,10 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [daily, setDaily] = useState<DailyStatusResponse | null>(null);
   const [history, setHistory] = useState<RoundHistoryItem[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const { status: daily, claimable: dailyClaimable, secondsLeft: dailySeconds, claim: claimDailyBonus } =
+    useDailyBonus();
   const [payCfg, setPayCfg] = useState<PaymentConfigResponse | null>(null);
   const [buyPack, setBuyPack] = useState(CHIP_PACKS[1]);
   const [withdrawAmount, setWithdrawAmount] = useState(0);
@@ -55,13 +51,11 @@ export default function AccountPage() {
   const currency = (payCfg?.currency ?? "pln").toUpperCase();
 
   const refresh = useCallback(async () => {
-    const [w, d, h] = await Promise.all([
+    const [w, h] = await Promise.all([
       getWallet().catch(() => null),
-      getDailyStatus().catch(() => null),
       getHistory(20).catch(() => null),
     ]);
     if (w) setBalance(w.balance);
-    if (d) setDaily(d);
     if (h) setHistory(h.rounds);
   }, []);
 
@@ -137,14 +131,13 @@ export default function AccountPage() {
     setSuccess(null);
     setBusy("daily");
     try {
-      const res = await claimDaily();
+      const res = await claimDailyBonus();
       if (res.granted) {
         setBalance(res.balance);
         setSuccess(`Odebrano dzienny bonus: +${Math.round(res.amount)} Ż (seria ${res.streak ?? 1})`);
       } else {
         setError("Dzienny bonus już odebrany — wróć później.");
       }
-      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nie udało się odebrać bonusu");
     } finally {
@@ -211,18 +204,23 @@ export default function AccountPage() {
           <p className="account-daily-streak">
             Seria logowań: <strong>{daily?.streak ?? 0}</strong> dni
           </p>
-          <p className="account-daily-amount">
-            {daily?.available
-              ? `Do odebrania: +${Math.round(daily.next_amount)} Ż`
-              : "Odebrany — wróć jutro po większy bonus"}
-          </p>
+          {dailyClaimable ? (
+            <p className="account-daily-amount">
+              Do odebrania: +{Math.round(daily?.next_amount ?? 0).toLocaleString("pl-PL")} Ż
+            </p>
+          ) : (
+            <p className="account-daily-amount account-daily-amount--wait">
+              Następny bonus za{" "}
+              <strong className="daily-timer">{formatCountdown(dailySeconds)}</strong>
+            </p>
+          )}
           <button
             type="button"
             className="btn btn-gold btn-block"
-            disabled={!daily?.available || busy === "daily"}
+            disabled={!dailyClaimable || busy === "daily"}
             onClick={onClaimDaily}
           >
-            {busy === "daily" ? "Odbieranie…" : daily?.available ? "Odbierz bonus" : "Niedostępne"}
+            {busy === "daily" ? "Odbieranie…" : dailyClaimable ? "Odbierz bonus" : "Niedostępne"}
           </button>
         </section>
 

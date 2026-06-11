@@ -24,6 +24,7 @@ from app.schemas.poker_state import (
 )
 from app.schemas.table_lobby import TableLobby, load_table_lobby, save_table_lobby
 from app.services.bonus import BonusService
+from app.services.payouts import boost_credit
 from app.services.wallet import WalletService
 
 
@@ -186,7 +187,9 @@ class PokerRoundService:
             })
 
         if st.phase in (PokerPhase.finished,):
-            bonus = await self._finalize_hand_db(st, game_session_id, user_id, wallet_svc)
+            bonus = await self._finalize_hand_db(
+                st, game_session_id, user_id, wallet_svc, difficulty
+            )
             await self.session.commit()
             display_lobby = lobby.with_ambient_bots(table_id)
             public = st.to_public_dict(table_phase="idle")
@@ -261,7 +264,7 @@ class PokerRoundService:
         if st.phase in (PokerPhase.finished,):
             await self.redis.delete(f"poker:{table_id}:state")
             bonus = await self._finalize_hand_db(
-                st, loaded.session_id, user_id, WalletService(self.session)
+                st, loaded.session_id, user_id, WalletService(self.session), loaded.difficulty
             )
             await self.session.commit()
             out = st.to_public_dict(table_phase="idle")
@@ -289,14 +292,19 @@ class PokerRoundService:
         session_id: UUID,
         user_id: UUID,
         wallet_svc: WalletService,
+        difficulty: str = "medium",
     ) -> dict | None:
         human = st.human_seat()
         wallet = await wallet_svc.get_wallet_for_user(user_id)
         if wallet is None:
             return None
 
-        if human.payout > 0:
-            await wallet_svc.apply_amount(wallet.id, human.payout, TransactionType.win)
+        # Harder tables pay a higher multiplier on the winning profit. Mirror the
+        # final rounded amount onto the seat so the table shows what is credited.
+        payout = boost_credit(human.payout, human.bet_total, difficulty)
+        human.payout = payout
+        if payout > 0:
+            await wallet_svc.apply_amount(wallet.id, payout, TransactionType.win)
 
         result_key = human.result or "loss"
         rr = RoundResult[result_key] if result_key in RoundResult.__members__ else RoundResult.draw
@@ -308,7 +316,7 @@ class PokerRoundService:
         self.session.add(Round(
             session_id=session_id,
             result=rr,
-            payout_amount=human.payout,
+            payout_amount=payout,
             bet_amount=human.bet_total,
             ai_actions={"game": "poker", "bots": bot_info},
         ))

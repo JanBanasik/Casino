@@ -1565,12 +1565,33 @@ a:hover {
   margin-top: 1rem;
 }
 
+.table-bet-controls {
+  margin-top: 0.85rem;
+  text-align: center;
+}
+.table-bet-total {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+.table-bet-total strong {
+  color: var(--gold-light);
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
 .table-bet-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
   justify-content: center;
-  margin-top: 0.85rem;
+  margin-top: 0.6rem;
+  align-items: center;
+}
+.casino-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.table-bet-clear {
+  align-self: center;
 }
 
 .table-error {
@@ -3043,3 +3064,75 @@ a:hover {
 .pay-rate-note { margin: 0.2rem 0 0.6rem; font-size: 0.78rem; color: var(--text-muted); }
 .pay-summary { margin: 0.5rem 0 0.9rem; font-size: 0.95rem; color: var(--text); }
 .pay-summary strong { color: var(--gold-light); }
+
+/* ── Difficulty payout sub-label ────────────────────────────────────────── */
+.difficulty-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  line-height: 1.1;
+}
+.difficulty-chip__mult {
+  font-size: 0.62rem;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+/* ── Daily bonus countdown / widget ─────────────────────────────────────── */
+.account-daily-amount--wait { color: var(--text-muted); }
+.daily-timer,
+.daily-widget__timer {
+  font-variant-numeric: tabular-nums;
+  color: var(--gold-light);
+  letter-spacing: 0.04em;
+}
+
+.daily-widget {
+  position: fixed;
+  left: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 900;
+  width: 270px;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.9rem 1rem;
+  background: linear-gradient(160deg, #16261c, #0c1812);
+  border: 1px solid var(--gold-dark);
+  border-radius: 14px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+  animation: daily-slide-in 0.4s ease;
+}
+@keyframes daily-slide-in {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.daily-widget--ready {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.55);
+  animation: daily-slide-in 0.4s ease, daily-pulse 2s ease-in-out infinite;
+}
+@keyframes daily-pulse {
+  0%, 100% { box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45), 0 0 0 0 rgba(212, 175, 55, 0.5); }
+  50% { box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45), 0 0 0 8px rgba(212, 175, 55, 0); }
+}
+.daily-widget__icon { font-size: 2rem; line-height: 1; }
+.daily-widget__body { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; }
+.daily-widget__title { font-weight: 700; color: var(--gold-light); font-size: 0.92rem; }
+.daily-widget__sub { font-size: 0.8rem; color: var(--text-muted); }
+.daily-widget__close {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.daily-widget__close:hover { color: #fff; }
+@media (max-width: 640px) {
+  .daily-widget { left: 0.75rem; right: 0.75rem; width: auto; bottom: 0.75rem; }
+}

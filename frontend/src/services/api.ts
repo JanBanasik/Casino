@@ -2,6 +2,7 @@ import type {
   BonusGrantResponse,
   CheckoutResponse,
   DailyStatusResponse,
+  GameConfigResponse,
   NotificationListResponse,
   PaymentConfigResponse,
   RoundHistoryResponse,
@@ -117,6 +118,18 @@ export function ackNotification(id: string) {
 
 export function getPaymentConfig() {
   return apiFetch<PaymentConfigResponse>("/api/payments/config", {}, true);
+}
+
+// Public, rarely-changing display config — fetched once and cached.
+let _gameConfig: Promise<GameConfigResponse> | null = null;
+export function getGameConfig() {
+  if (!_gameConfig) {
+    _gameConfig = apiFetch<GameConfigResponse>("/api/config/game").catch((e) => {
+      _gameConfig = null; // allow retry on failure
+      throw e;
+    });
+  }
+  return _gameConfig;
 }
 
 export function buyChips(chips: number) {

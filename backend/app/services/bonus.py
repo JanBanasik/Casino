@@ -20,6 +20,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.db.models import GameSession, Round, RoundResult, TransactionType, Wallet
 from app.services.notifications import NotificationService
+from app.services.payouts import round_chips
 
 
 def _utcnow() -> datetime:
@@ -120,8 +121,10 @@ class BonusService:
         if n <= 0 or len(stakes) == 0 or len(stakes) % n != 0:
             return False, 0.0
         window = stakes[:n]
-        refund = round(min(sum(window) * settings.bonus_loss_refund_pct,
-                           settings.bonus_loss_refund_cap), 2)
+        refund = round_chips(min(
+            sum(window) * settings.bonus_loss_refund_pct,
+            settings.bonus_loss_refund_cap,
+        ))
         if refund <= 0:
             return False, 0.0
         wallet = await wallet_service.get_wallet_for_user(user_id)

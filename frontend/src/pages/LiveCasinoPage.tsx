@@ -57,6 +57,7 @@ export default function LiveCasinoPage() {
       const params = new URLSearchParams({
         table: solo ? `solo-${session.id}` : table.id,
         difficulty,
+        min: String(table.minBet),
         ...(solo ? { solo: "1" } : { bots: String(botCount) }),
       });
       navigate(`/graj/${session.id}?${params.toString()}`, {
@@ -79,7 +80,7 @@ export default function LiveCasinoPage() {
     try {
       const session = await createSession("blackjack");
       // Private table per solo session (see handleJoin) — never the shared "default".
-      navigate(`/graj/${session.id}?table=solo-${session.id}&solo=1&difficulty=${difficulty}`, {
+      navigate(`/graj/${session.id}?table=solo-${session.id}&solo=1&difficulty=${difficulty}&min=10`, {
         state: { tableName: "Blackjack — Gra solo", minBet: 10 },
       });
     } catch (e) {
