@@ -41,6 +41,7 @@ class RedisPokerState(BaseModel):
     small_blind: float = 10.0
     big_blind: float = 20.0
     bot_count: int = 2
+    difficulty: str = "medium"
     message: str | None = None
 
     @classmethod
@@ -51,6 +52,7 @@ class RedisPokerState(BaseModel):
         user_id: UUID,
         st: PokerState,
         bot_count: int = 2,
+        difficulty: str = "medium",
     ) -> RedisPokerState:
         return cls(
             session_id=session_id,
@@ -86,6 +88,7 @@ class RedisPokerState(BaseModel):
             small_blind=st.small_blind,
             big_blind=st.big_blind,
             bot_count=bot_count,
+            difficulty=difficulty,
             message=st.message,
         )
 

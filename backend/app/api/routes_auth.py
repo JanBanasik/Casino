@@ -7,9 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
 from app.api.dto import LoginRequest, RegisterRequest, TokenResponse
+from app.core.config import settings
 from app.core.limiter import limiter
 from app.core.security import create_access_token, hash_password, verify_password
-from app.db.models import User, Wallet
+from app.db.models import Notification, Transaction, TransactionType, User, Wallet
 
 router = APIRouter()
 
@@ -35,8 +36,35 @@ async def register(
     )
     db.add(user)
     await db.flush()
-    wallet = Wallet(user_id=user.id, balance=0.0, retention_level=0)
+    # Welcome bonus: new players start with a play-money stake so they can try
+    # every game immediately (see Settings.bonus_welcome).
+    wallet = Wallet(
+        user_id=user.id,
+        balance=settings.bonus_welcome,
+        retention_level=0,
+        welcome_bonus_claimed=True,
+    )
     db.add(wallet)
+    await db.flush()
+    db.add(
+        Transaction(
+            wallet_id=wallet.id,
+            amount=settings.bonus_welcome,
+            transaction_type=TransactionType.bonus,
+        )
+    )
+    db.add(
+        Notification(
+            user_id=user.id,
+            kind="welcome",
+            title="Witaj w kasynie!",
+            body=(
+                f"Na start dodaliśmy Ci {round(settings.bonus_welcome)} żetonów — "
+                "wystarczy, by spróbować wszystkich gier. Powodzenia!"
+            ),
+            amount=settings.bonus_welcome,
+        )
+    )
     await db.commit()
     token = create_access_token(user.id)
     return TokenResponse(access_token=token)

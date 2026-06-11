@@ -21,13 +21,11 @@ from app.engine.multi_seat import (
     human_settle_result,
     new_multi_round,
 )
-from app.ml_inference.policies import make_default_policy
+from app.ml_inference.registry import get_blackjack_policy
 from app.schemas.table_lobby import TableLobby, load_table_lobby, save_table_lobby  # noqa: F401
 from app.schemas.table_state import RedisTableState, load_table_state, save_table_state
-from app.services.retention import RetentionService
+from app.services.bonus import BonusService
 from app.services.wallet import WalletService
-
-_bot_policy = make_default_policy()
 
 
 class GameRoundService:
@@ -141,6 +139,7 @@ class GameRoundService:
         *,
         solo: bool = False,
         bot_count: int = 0,
+        difficulty: str = "medium",
     ) -> tuple[RedisTableState, dict, int, int]:
         """Deal cards and save initial state WITHOUT advancing any bots yet.
         Returns (redis_state, initial_public_dict, human_seat_index, total_players).
@@ -185,7 +184,9 @@ class GameRoundService:
         )
 
         # Save state WITHOUT running bot turns (WS handler will do it incrementally)
-        redis_st = RedisTableState.from_multi(table_id, game_session_id, user_id, st, bot_count)
+        redis_st = RedisTableState.from_multi(
+            table_id, game_session_id, user_id, st, bot_count, difficulty
+        )
         await save_table_state(self.redis, redis_st, settings.table_state_ttl_seconds)
         await self.session.commit()
 
@@ -211,7 +212,7 @@ class GameRoundService:
             return None
 
         st = loaded.to_multi()
-        result = advance_one_bot(st, _bot_policy)
+        result = advance_one_bot(st, get_blackjack_policy(loaded.difficulty))
         if result is None:
             return None  # Human's turn
 
@@ -242,7 +243,7 @@ class GameRoundService:
             await self.session.commit()
         else:
             redis_st = RedisTableState.from_multi(
-                table_id, loaded.session_id, user_id, st, loaded.bot_count
+                table_id, loaded.session_id, user_id, st, loaded.bot_count, loaded.difficulty
             )
             await save_table_state(self.redis, redis_st, settings.table_state_ttl_seconds)
             await self.session.commit()
@@ -290,7 +291,7 @@ class GameRoundService:
                 public["retention"] = bonus
         else:
             redis_st = RedisTableState.from_multi(
-                table_id, loaded.session_id, user_id, st, loaded.bot_count
+                table_id, loaded.session_id, user_id, st, loaded.bot_count, loaded.difficulty
             )
             await save_table_state(self.redis, redis_st, settings.table_state_ttl_seconds)
             await self.session.commit()
@@ -311,6 +312,7 @@ class GameRoundService:
         *,
         solo: bool = False,
         bot_count: int = 0,
+        difficulty: str = "medium",
     ) -> tuple[RedisTableState | None, dict, list[dict]]:
         """Start a round when table is idle; requires seated player."""
         lobby = await load_table_lobby(self.redis, table_id)
@@ -330,6 +332,7 @@ class GameRoundService:
             solo=solo,
             bot_count=bot_count,
             human_seat_index=seat_idx,
+            difficulty=difficulty,
         )
 
     async def new_round(
@@ -342,6 +345,7 @@ class GameRoundService:
         solo: bool = False,
         bot_count: int = 0,
         human_seat_index: int = 3,
+        difficulty: str = "medium",
     ) -> tuple[RedisTableState | None, dict, list[dict]]:
         gs = await self._get_session_owned(game_session_id, user_id)
         if gs is None:
@@ -377,7 +381,9 @@ class GameRoundService:
         )
 
         seat_events: list[dict] = []
-        pre_human = advance_bot_turns(st, _bot_policy, stop_at_human=True)
+        pre_human = advance_bot_turns(
+            st, get_blackjack_policy(difficulty), stop_at_human=True
+        )
         for idx, action in pre_human:
             seat_events.append(
                 {
@@ -400,7 +406,9 @@ class GameRoundService:
                 public["retention"] = bonus
             return None, public, seat_events
 
-        redis_st = RedisTableState.from_multi(table_id, game_session_id, user_id, st, bot_count)
+        redis_st = RedisTableState.from_multi(
+            table_id, game_session_id, user_id, st, bot_count, difficulty
+        )
         await save_table_state(self.redis, redis_st, settings.table_state_ttl_seconds)
         await self.session.commit()
         public = st.to_public_dict(table_phase="playing")
@@ -490,7 +498,7 @@ class GameRoundService:
         await save_table_state(
             self.redis,
             RedisTableState.from_multi(
-                table_id, loaded.session_id, user_id, st, loaded.bot_count
+                table_id, loaded.session_id, user_id, st, loaded.bot_count, loaded.difficulty
             ),
             settings.table_state_ttl_seconds,
         )
@@ -518,6 +526,9 @@ class GameRoundService:
         if credit > 0:
             await wallet_svc.apply_amount(wallet.id, credit, TransactionType.win)
 
+        human = st.human_seat()
+        total_stake = sum(human.hand_bets) if human.has_split else human.bet
+
         bot_actions = [
             {"seat": s.display_name, "result": s.result, "hand": s.hand}
             for s in st.seats
@@ -528,16 +539,13 @@ class GameRoundService:
                 session_id=session_id,
                 result=rr,
                 payout_amount=credit,
+                bet_amount=total_stake,
                 ai_actions={"table_id": table_id, "bots": bot_actions},
             )
         )
         await self.session.flush()
 
-        if rr != RoundResult.loss:
-            return None
-
-        ret = RetentionService(self.session)
-        granted, amount = await ret.maybe_bad_beat_bonus(user_id, wallet_svc)
-        if granted:
-            return {"bad_beat_bonus": True, "amount": amount}
-        return None
+        bonus = BonusService(self.session)
+        return await bonus.settle_post_round(
+            user_id, wallet_svc, was_loss=rr == RoundResult.loss
+        )

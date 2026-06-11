@@ -1,7 +1,14 @@
 import type {
+  BonusGrantResponse,
+  CheckoutResponse,
+  DailyStatusResponse,
+  NotificationListResponse,
+  PaymentConfigResponse,
+  RoundHistoryResponse,
   SessionResponse,
   TokenResponse,
   WalletResponse,
+  WithdrawResponse,
   WsTicketResponse,
 } from "../types/api";
 
@@ -78,10 +85,51 @@ export function getWallet() {
   return apiFetch<WalletResponse>("/api/wallet/me", {}, true);
 }
 
-export function deposit(amount: number) {
-  return apiFetch<WalletResponse>("/api/wallet/deposit", {
+export function getDailyStatus() {
+  return apiFetch<DailyStatusResponse>("/api/wallet/daily", {}, true);
+}
+
+export function claimDaily() {
+  return apiFetch<BonusGrantResponse>("/api/wallet/daily/claim", {
     method: "POST",
-    body: JSON.stringify({ amount }),
+  }, true);
+}
+
+export function claimRescue() {
+  return apiFetch<BonusGrantResponse>("/api/wallet/rescue", {
+    method: "POST",
+  }, true);
+}
+
+export function getHistory(limit = 25) {
+  return apiFetch<RoundHistoryResponse>(`/api/sessions/history?limit=${limit}`, {}, true);
+}
+
+export function getNotifications() {
+  return apiFetch<NotificationListResponse>("/api/notifications", {}, true);
+}
+
+export function ackNotification(id: string) {
+  return apiFetch<{ acknowledged: boolean }>(`/api/notifications/${id}/ack`, {
+    method: "POST",
+  }, true);
+}
+
+export function getPaymentConfig() {
+  return apiFetch<PaymentConfigResponse>("/api/payments/config", {}, true);
+}
+
+export function buyChips(chips: number) {
+  return apiFetch<CheckoutResponse>("/api/payments/checkout", {
+    method: "POST",
+    body: JSON.stringify({ chips }),
+  }, true);
+}
+
+export function withdrawChips(chips: number, accountNumber: string) {
+  return apiFetch<WithdrawResponse>("/api/payments/withdraw", {
+    method: "POST",
+    body: JSON.stringify({ chips, account_number: accountNumber }),
   }, true);
 }
 

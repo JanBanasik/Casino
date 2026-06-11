@@ -26,6 +26,7 @@ export function usePokerSocket(
   sessionId: string | null,
   tableId = "default",
   botCount = 3,
+  difficulty = "medium",
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>("idle");
@@ -152,10 +153,11 @@ export function usePokerSocket(
           session_id: sessionId,
           buy_in: buyIn,
           bot_count: bots ?? botCount,
+          difficulty,
         }),
       );
     },
-    [sessionId, botCount],
+    [sessionId, botCount, difficulty],
   );
 
   const action = useCallback(

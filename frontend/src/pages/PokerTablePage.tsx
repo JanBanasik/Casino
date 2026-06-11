@@ -9,7 +9,9 @@ import { sound } from "../lib/sound";
 import { useAuth } from "../hooks/useAuth";
 import { usePokerSocket } from "../hooks/usePokerSocket";
 import { createPokerSession, getWallet } from "../services/api";
-import type { PokerSeatPayload } from "../types/api";
+import { DifficultyBadge } from "../components/DifficultyPicker";
+import { useReportRoundActivity } from "../hooks/useGameActivity";
+import type { Difficulty, PokerSeatPayload } from "../types/api";
 
 const POKER_SEAT_POSITIONS = [
   { x: 12, y: 68 },
@@ -77,6 +79,7 @@ export default function PokerTablePage() {
   const tableId = searchParams.get("table") ?? "poker-default";
   const botCountParam = parseInt(searchParams.get("bots") ?? "3", 10);
   const botCount = Number.isNaN(botCountParam) ? 3 : botCountParam;
+  const difficulty = (searchParams.get("difficulty") ?? "medium") as Difficulty;
 
   const { token } = useAuth();
   const navigate = useNavigate();
@@ -99,7 +102,11 @@ export default function PokerTablePage() {
     check,
     call,
     raise,
-  } = usePokerSocket(sessionId, tableId, botCount);
+  } = usePokerSocket(sessionId, tableId, botCount, difficulty);
+
+  // A hand is "active" only while betting streets are running.
+  const pokerActive = ["pre_flop", "flop", "turn", "river"].includes(pokerState?.phase ?? "");
+  useReportRoundActivity(pokerActive);
 
   useEffect(() => {
     if (!token) navigate("/login", { state: { from: "/stoły" } });
@@ -304,6 +311,8 @@ export default function PokerTablePage() {
             <h1>Texas Hold'em</h1>
             <p className="table-subtitle">
               Do {botCount + 1} graczy · Blindy: {pokerState?.small_blind ?? 5}/{pokerState?.big_blind ?? 10} Ż
+              {" · "}
+              <DifficultyBadge value={difficulty} />
             </p>
           </div>
           <div className="game-room-stats">

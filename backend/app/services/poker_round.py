@@ -16,16 +16,15 @@ from app.engine.poker import (
     apply_poker_action,
     new_poker_round,
 )
-from app.ml_inference.poker_policies import make_poker_policy
+from app.ml_inference.registry import get_poker_policy
 from app.schemas.poker_state import (
     RedisPokerState,
     load_poker_state,
     save_poker_state,
 )
 from app.schemas.table_lobby import TableLobby, load_table_lobby, save_table_lobby
+from app.services.bonus import BonusService
 from app.services.wallet import WalletService
-
-_bot_policy = make_poker_policy()
 
 
 class PokerRoundService:
@@ -136,6 +135,7 @@ class PokerRoundService:
         table_id: str,
         buy_in: float,
         bot_count: int = 2,
+        difficulty: str = "medium",
     ) -> tuple[RedisPokerState | None, dict, list[dict]]:
         lobby = await load_table_lobby(self.redis, table_id)
         seat_idx = self._lobby_seat_index(lobby, user_id)
@@ -176,7 +176,7 @@ class PokerRoundService:
         )
 
         seat_events: list[dict] = []
-        pre_events = advance_poker_bots(st, _bot_policy)
+        pre_events = advance_poker_bots(st, get_poker_policy(difficulty))
         for idx, action, amount in pre_events:
             seat_events.append({
                 "seat_index": idx,
@@ -186,7 +186,7 @@ class PokerRoundService:
             })
 
         if st.phase in (PokerPhase.finished,):
-            await self._finalize_hand_db(st, game_session_id, user_id, wallet_svc)
+            bonus = await self._finalize_hand_db(st, game_session_id, user_id, wallet_svc)
             await self.session.commit()
             display_lobby = lobby.with_ambient_bots(table_id)
             public = st.to_public_dict(table_phase="idle")
@@ -194,9 +194,13 @@ class PokerRoundService:
             public["lobby_seats"] = display_lobby.to_public()
             public["my_seat_index"] = seat_idx
             public["round_in_progress"] = False
+            if bonus:
+                public["retention"] = bonus
             return None, public, seat_events
 
-        redis_st = RedisPokerState.from_poker(table_id, game_session_id, user_id, st, bot_count)
+        redis_st = RedisPokerState.from_poker(
+            table_id, game_session_id, user_id, st, bot_count, difficulty
+        )
         await save_poker_state(self.redis, redis_st, settings.table_state_ttl_seconds)
         await self.session.commit()
         display_lobby = lobby.with_ambient_bots(table_id)
@@ -242,7 +246,7 @@ class PokerRoundService:
         })
 
         # Advance bots after human action
-        bot_events = advance_poker_bots(st, _bot_policy)
+        bot_events = advance_poker_bots(st, get_poker_policy(loaded.difficulty))
         for idx, bot_action, amount in bot_events:
             seat_events.append({
                 "seat_index": idx,
@@ -256,7 +260,7 @@ class PokerRoundService:
 
         if st.phase in (PokerPhase.finished,):
             await self.redis.delete(f"poker:{table_id}:state")
-            await self._finalize_hand_db(
+            bonus = await self._finalize_hand_db(
                 st, loaded.session_id, user_id, WalletService(self.session)
             )
             await self.session.commit()
@@ -265,10 +269,12 @@ class PokerRoundService:
             out["lobby_seats"] = display_lobby.to_public()
             out["my_seat_index"] = self._lobby_seat_index(lobby, user_id)
             out["round_in_progress"] = False
+            if bonus:
+                out["retention"] = bonus
             return out, seat_events
 
         updated = RedisPokerState.from_poker(
-            table_id, loaded.session_id, user_id, st, loaded.bot_count
+            table_id, loaded.session_id, user_id, st, loaded.bot_count, loaded.difficulty
         )
         await save_poker_state(self.redis, updated, settings.table_state_ttl_seconds)
         await self.session.commit()
@@ -283,11 +289,11 @@ class PokerRoundService:
         session_id: UUID,
         user_id: UUID,
         wallet_svc: WalletService,
-    ) -> None:
+    ) -> dict | None:
         human = st.human_seat()
         wallet = await wallet_svc.get_wallet_for_user(user_id)
         if wallet is None:
-            return
+            return None
 
         if human.payout > 0:
             await wallet_svc.apply_amount(wallet.id, human.payout, TransactionType.win)
@@ -303,6 +309,12 @@ class PokerRoundService:
             session_id=session_id,
             result=rr,
             payout_amount=human.payout,
+            bet_amount=human.bet_total,
             ai_actions={"game": "poker", "bots": bot_info},
         ))
         await self.session.flush()
+
+        bonus = BonusService(self.session)
+        return await bonus.settle_post_round(
+            user_id, wallet_svc, was_loss=rr == RoundResult.loss
+        )

@@ -117,8 +117,9 @@ async def poker_ws(websocket: WebSocket, table_id: str) -> None:
                         sid = UUID(str(msg["session_id"]))
                         buy_in = float(msg.get("buy_in", 500))
                         bot_count = int(msg.get("bot_count", 2))
+                        difficulty = str(msg.get("difficulty", "medium"))
                         _, public, seat_events = await svc.start_hand(
-                            user_id, sid, table_id, buy_in, bot_count
+                            user_id, sid, table_id, buy_in, bot_count, difficulty
                         )
                         await _emit_seat_actions(websocket, seat_events, public)
 

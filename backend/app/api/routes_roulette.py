@@ -16,6 +16,7 @@ from app.engine.roulette import (
     spin,
     total_staked,
 )
+from app.services.bonus import BonusService
 from app.services.wallet import WalletService
 
 router = APIRouter()
@@ -41,6 +42,7 @@ class RouletteSpinResponse(BaseModel):
     total_payout: float
     net: float
     new_balance: float
+    bonus: dict | None = None
 
 
 @router.post("/spin", response_model=RouletteSpinResponse)
@@ -113,8 +115,16 @@ async def roulette_spin(
         session_id=body.session_id,
         result=rr,
         payout_amount=payout_total,
+        bet_amount=total_bet,
         ai_actions={"game": "roulette", "result": result_num, "color": result_color},
     ))
+    await db.flush()
+
+    bonus_svc = BonusService(db)
+    bonus = await bonus_svc.settle_post_round(
+        user.id, wallet_svc, was_loss=rr == RoundResult.loss
+    )
+
     await db.commit()
     await db.refresh(wallet)
 
@@ -125,4 +135,5 @@ async def roulette_spin(
         total_payout=payout_total,
         net=net,
         new_balance=wallet.balance,
+        bonus=bonus,
     )

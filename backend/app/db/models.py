@@ -3,7 +3,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -19,6 +19,14 @@ class TransactionType(str, enum.Enum):
     bet = "bet"
     win = "win"
     bonus = "bonus"
+    purchase = "purchase"
+    withdrawal = "withdrawal"
+
+
+class WithdrawalStatus(str, enum.Enum):
+    requested = "requested"
+    paid = "paid"
+    rejected = "rejected"
 
 
 class GameType(str, enum.Enum):
@@ -57,6 +65,16 @@ class Wallet(Base):
     )
     balance: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     retention_level: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    welcome_bonus_claimed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    daily_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_daily_claim_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_rescue_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     user: Mapped["User"] = relationship(back_populates="wallet")
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="wallet")
@@ -99,6 +117,51 @@ class GameSession(Base):
     rounds: Mapped[list["Round"]] = relationship(back_populates="session")
 
 
+class Notification(Base):
+    """A bonus/system alert the player must explicitly acknowledge.
+
+    Surfaced off-table (never mid-round) by a blocking modal on the web app.
+    """
+
+    __tablename__ = "notifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    acknowledged: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, index=True
+    )
+
+
+class Withdrawal(Base):
+    """A cash-out request: chips converted to fiat at the configured rate."""
+
+    __tablename__ = "withdrawals"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    chips: Mapped[float] = mapped_column(Float, nullable=False)
+    amount_minor: Mapped[int] = mapped_column(Integer, nullable=False)  # fiat in grosze
+    currency: Mapped[str] = mapped_column(String(8), nullable=False, default="pln")
+    payout_account: Mapped[str] = mapped_column(String(40), nullable=False, default="")
+    status: Mapped[WithdrawalStatus] = mapped_column(
+        Enum(WithdrawalStatus, name="withdrawal_status_enum"),
+        nullable=False,
+        default=WithdrawalStatus.requested,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+
 class Round(Base):
     __tablename__ = "rounds"
 
@@ -113,6 +176,7 @@ class Round(Base):
         Enum(RoundResult, name="round_result_enum"), nullable=False
     )
     payout_amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    bet_amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     ai_actions: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow, index=True

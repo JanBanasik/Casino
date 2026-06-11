@@ -39,10 +39,16 @@ export interface TableStatePayload {
   waiting_for_round?: boolean;
   lobby_seats?: (LobbySeatPayload | null)[];
   seats?: SeatStatePayload[];
-  retention?: {
-    bad_beat_bonus?: boolean;
-    amount?: number;
-  };
+  retention?: BonusPayload;
+}
+
+export type Difficulty = "easy" | "medium" | "hard";
+
+export interface BonusPayload {
+  loss_refund?: boolean;
+  loss_refund_amount?: number;
+  rescue?: boolean;
+  rescue_amount?: number;
 }
 
 export interface WsStateMessage {
@@ -121,6 +127,73 @@ export interface RouletteSpinResult {
   total_payout: number;
   net: number;
   new_balance: number;
+  bonus?: BonusPayload | null;
+}
+
+export interface DailyStatusResponse {
+  available: boolean;
+  streak: number;
+  next_amount: number;
+  next_available_at: string | null;
+}
+
+export interface BonusGrantResponse {
+  granted: boolean;
+  amount: number;
+  balance: number;
+  message?: string | null;
+  streak?: number | null;
+}
+
+export interface RoundHistoryItem {
+  id: string;
+  game_type: string;
+  result: string;
+  bet_amount: number;
+  payout_amount: number;
+  net: number;
+  created_at: string;
+}
+
+export interface RoundHistoryResponse {
+  rounds: RoundHistoryItem[];
+}
+
+export interface NotificationItem {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  amount: number;
+  created_at: string;
+}
+
+export interface NotificationListResponse {
+  notifications: NotificationItem[];
+}
+
+export interface PaymentConfigResponse {
+  stripe_enabled: boolean;
+  publishable_key: string;
+  currency: string;
+  chips_per_currency_unit: number;
+  withdraw_min_chips: number;
+}
+
+export interface CheckoutResponse {
+  url: string | null;
+  simulated: boolean;
+  balance: number | null;
+  amount_minor: number;
+  currency: string;
+}
+
+export interface WithdrawResponse {
+  chips: number;
+  amount_minor: number;
+  currency: string;
+  status: string;
+  balance: number;
 }
 
 export interface TokenResponse {
