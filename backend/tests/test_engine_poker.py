@@ -54,6 +54,28 @@ def test_hand_rank_strict_ordering():
     assert categories == list(range(9))
 
 
+def test_kicker_ordering_pairs_and_kickers():
+    # A higher pair beats a lower pair regardless of kickers.
+    pair_kings = hand_rank(["KC", "KD", "5C", "3C", "2C"])
+    pair_deuces_ace = hand_rank(["2C", "2D", "AC", "KH", "QH"])
+    assert pair_kings > pair_deuces_ace
+
+    # Same pair → higher kicker wins.
+    aces_king = hand_rank(["AC", "AD", "KC", "5C", "2C"])
+    aces_queen = hand_rank(["AS", "AH", "QC", "5D", "2D"])
+    assert aces_king > aces_queen
+
+    # Two pair → top pair decides, then second pair, then kicker.
+    kk_qq = hand_rank(["KC", "KD", "QC", "QD", "2C"])
+    kk_jj = hand_rank(["KS", "KH", "JC", "JD", "AC"])
+    assert kk_qq > kk_jj
+
+    # Full house ranked by the trips, not the pair.
+    nines_full = hand_rank(["9C", "9D", "9H", "2C", "2D"])
+    eights_full_aces = hand_rank(["8C", "8D", "8H", "AC", "AD"])
+    assert nines_full > eights_full_aces
+
+
 def test_best_five_from_seven_picks_full_house():
     rank, best = best_five_from_seven(
         ["AH", "AD"], ["AC", "KD", "KS", "2C", "7H"]

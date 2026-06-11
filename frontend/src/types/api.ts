@@ -176,6 +176,7 @@ export interface GameConfigResponse {
   win_multiplier_easy: number;
   win_multiplier_medium: number;
   win_multiplier_hard: number;
+  poker_min_buyin: number;
 }
 
 export interface PaymentConfigResponse {

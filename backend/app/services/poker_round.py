@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.table_limits import poker_table_blinds
 from app.db.models import GameSession, Round, RoundResult, TransactionType, User
 from app.engine.poker import (
     PokerAction,
@@ -65,6 +66,7 @@ class PokerRoundService:
             public["round_in_progress"] = st.phase not in (PokerPhase.showdown, PokerPhase.finished)
             return public
 
+        small_blind, big_blind = poker_table_blinds(table_id)
         return {
             "table_phase": "idle",
             "phase": "waiting",
@@ -72,12 +74,12 @@ class PokerRoundService:
             "hole_cards": [],
             "pot": 0,
             "current_bet": 0,
-            "min_raise": 20,
+            "min_raise": big_blind,
             "active_seat_index": None,
             "dealer_seat_index": 0,
             "human_seat_index": my_seat if my_seat is not None else 0,
-            "small_blind": 10,
-            "big_blind": 20,
+            "small_blind": small_blind,
+            "big_blind": big_blind,
             "message": None,
             "seats": [],
             "lobby_seats": display_lobby.to_public(),
@@ -154,6 +156,14 @@ class PokerRoundService:
         if gs is None:
             raise ValueError("session_not_found")
 
+        small_blind, big_blind = poker_table_blinds(table_id)
+        # Must at least cover the big blind, and never below the global floor.
+        min_buyin = max(settings.poker_min_buyin, big_blind)
+        if buy_in < min_buyin:
+            raise ValueError("buyin_below_minimum")
+        if buy_in > settings.poker_max_buyin:
+            raise ValueError("buyin_above_maximum")
+
         wallet_svc = WalletService(self.session)
         wallet = await wallet_svc.get_wallet_for_user(user_id)
         if wallet is None:
@@ -171,8 +181,8 @@ class PokerRoundService:
             human_seat_index=seat_idx,
             bot_count=bot_count,
             buy_in=buy_in,
-            small_blind=10.0,
-            big_blind=20.0,
+            small_blind=small_blind,
+            big_blind=big_blind,
             rng=random.Random(),
         )
 
@@ -299,15 +309,24 @@ class PokerRoundService:
         if wallet is None:
             return None
 
-        # Harder tables pay a higher multiplier on the winning profit. Mirror the
-        # final rounded amount onto the seat so the table shows what is credited.
-        payout = boost_credit(human.payout, human.bet_total, difficulty)
-        human.payout = payout
-        if payout > 0:
-            await wallet_svc.apply_amount(wallet.id, payout, TransactionType.win)
+        # The buy-in was debited up front, so at hand end we cash out the player's
+        # whole remaining stack — NOT just the pot they won. Otherwise folding (or
+        # any hand where you don't commit your full stack) would forfeit the
+        # unbet chips. Every seat starts the hand with the buy-in, so:
+        #   buy_in = final_chips + committed - pot_won
+        buy_in = human.chips + human.bet_total - human.payout
+        # Cash out, boosting only the winning profit by the table's multiplier.
+        final_credit = boost_credit(human.chips, buy_in, difficulty)
+        human.chips = final_credit  # show the cashed-out stack at the table
+        if final_credit > 0:
+            await wallet_svc.apply_amount(wallet.id, final_credit, TransactionType.win)
 
         result_key = human.result or "loss"
         rr = RoundResult[result_key] if result_key in RoundResult.__members__ else RoundResult.draw
+        # Record the hand result: stake = chips committed, payout = boosted pot win,
+        # so history net (payout − bet) equals the player's net result.
+        boosted_winnings = boost_credit(human.payout, human.bet_total, difficulty)
+        human.payout = boosted_winnings
         bot_info = [
             {"seat": s.display_name, "result": s.result, "hand": s.hole_cards}
             for s in st.seats
@@ -316,7 +335,7 @@ class PokerRoundService:
         self.session.add(Round(
             session_id=session_id,
             result=rr,
-            payout_amount=payout,
+            payout_amount=boosted_winnings,
             bet_amount=human.bet_total,
             ai_actions={"game": "poker", "bots": bot_info},
         ))

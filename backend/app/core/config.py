@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     win_multiplier_medium: float = 1.0
     win_multiplier_hard: float = 1.25
 
+    # ── Poker ─────────────────────────────────────────────────────────────────
+    poker_min_buyin: float = 50.0
+    poker_max_buyin: float = 100000.0
+
     # ── Payments (Stripe) ─────────────────────────────────────────────────────
     # Exchange rate: 1 unit of fiat buys this many chips. Default 5 ⇒ a chip is
     # worth 0.20 zł, i.e. one fiat unit equals the smallest stake in any game.

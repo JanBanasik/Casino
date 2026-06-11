@@ -11,6 +11,7 @@ class GameConfigResponse(BaseModel):
     win_multiplier_easy: float
     win_multiplier_medium: float
     win_multiplier_hard: float
+    poker_min_buyin: float
 
 
 @router.get("/game", response_model=GameConfigResponse)
@@ -21,4 +22,5 @@ async def game_config(request: Request) -> GameConfigResponse:
         win_multiplier_easy=settings.win_multiplier_easy,
         win_multiplier_medium=settings.win_multiplier_medium,
         win_multiplier_hard=settings.win_multiplier_hard,
+        poker_min_buyin=settings.poker_min_buyin,
     )
