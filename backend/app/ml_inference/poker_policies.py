@@ -62,6 +62,30 @@ class PokerRLPolicy:
         return decode_poker_action(action_idx, seat, state)
 
 
+class LoosePokerBotPolicy:
+    """Weak "easy" bot: a calling station that rarely folds and never bluffs.
+
+    Mirrors the ``choose_action`` interface so it drops into ``advance_poker_bots``.
+    """
+
+    name = "loose_poker"
+
+    def choose_action(
+        self,
+        seat: PokerSeat,
+        state: PokerState,
+        rng: random.Random | None = None,
+    ) -> tuple[PokerAction, float]:
+        rng = rng or random.Random()
+        call_amount = state.current_bet - seat.bet_phase
+        if call_amount <= 0:
+            return PokerAction.check, 0.0
+        # Calls almost anything it can afford; folds only to very large bets.
+        if call_amount <= seat.chips * 0.6:
+            return PokerAction.call, 0.0
+        return PokerAction.fold, 0.0
+
+
 def make_poker_policy():
     """Best available poker policy.
 

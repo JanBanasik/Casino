@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import LiveTableCard from "../components/LiveTableCard";
+import DifficultyPicker from "../components/DifficultyPicker";
 import { LIVE_TABLES, type LiveTable } from "../data/games";
 import { createSession, createPokerSession } from "../services/api";
 import { useAuth } from "../hooks/useAuth";
+import type { Difficulty } from "../types/api";
 
 const POKER_TABLES = [
   {
@@ -37,6 +39,7 @@ export default function LiveCasinoPage() {
   const navigate = useNavigate();
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [difficulty, setDifficulty] = useState<Difficulty>("medium");
 
   async function handleJoin(table: LiveTable, solo: boolean) {
     if (!token) {
@@ -53,6 +56,7 @@ export default function LiveCasinoPage() {
       // Give each solo session its own private, single-use table.
       const params = new URLSearchParams({
         table: solo ? `solo-${session.id}` : table.id,
+        difficulty,
         ...(solo ? { solo: "1" } : { bots: String(botCount) }),
       });
       navigate(`/graj/${session.id}?${params.toString()}`, {
@@ -75,7 +79,7 @@ export default function LiveCasinoPage() {
     try {
       const session = await createSession("blackjack");
       // Private table per solo session (see handleJoin) — never the shared "default".
-      navigate(`/graj/${session.id}?table=solo-${session.id}&solo=1`, {
+      navigate(`/graj/${session.id}?table=solo-${session.id}&solo=1&difficulty=${difficulty}`, {
         state: { tableName: "Blackjack — Gra solo", minBet: 10 },
       });
     } catch (e) {
@@ -94,7 +98,7 @@ export default function LiveCasinoPage() {
     setJoiningId(tableId);
     try {
       const session = await createPokerSession();
-      navigate(`/poker/${session.id}?table=${tableId}&bots=3`);
+      navigate(`/poker/${session.id}?table=${tableId}&bots=3&difficulty=${difficulty}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Nie udało się dołączyć do stołu pokerowego");
     } finally {
@@ -124,6 +128,13 @@ export default function LiveCasinoPage() {
       )}
 
       {error && <div className="banner banner--error">{error}</div>}
+
+      <div className="difficulty-bar">
+        <DifficultyPicker value={difficulty} onChange={setDifficulty} />
+        <p className="difficulty-bar__note">
+          Dotyczy blackjacka i pokera. Ruletka jest grą czysto losową — poziom jej nie zmienia.
+        </p>
+      </div>
 
       {/* ── Blackjack ── */}
       <article className="solo-card">

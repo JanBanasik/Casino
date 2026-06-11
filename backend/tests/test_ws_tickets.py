@@ -44,13 +44,19 @@ async def test_ws_ticket_single_use():
 def test_auth_wallet_session_and_ws_ticket(client):
     token = _register_and_login(client, _unique_user("ws1"))
 
+    # New accounts start with the welcome bonus credited.
+    me = client.get("/api/wallet/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200
+    start_balance = me.json()["balance"]
+    assert start_balance > 0
+
     dep = client.post(
         "/api/wallet/deposit",
         json={"amount": 100},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert dep.status_code == 200
-    assert dep.json()["balance"] == 100
+    assert dep.json()["balance"] == start_balance + 100
 
     session = client.post(
         "/api/sessions",

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import app.main\")",
+      "Bash(npx eslint *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(node -e \"try{require\\('playwright'\\);console.log\\('playwright avail'\\)}catch{console.log\\('no playwright'\\)}\")",
+      "Bash(grep -v \"INFO\\\\|loguru\\\\|^$\")",
+      "Bash(timeout 90 uv sync --group payments)"
+    ]
+  }
+}

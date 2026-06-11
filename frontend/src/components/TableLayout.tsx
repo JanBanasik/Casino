@@ -43,11 +43,16 @@ export default function TableLayout({
   const roundPlaying = Boolean(
     tableState?.table_phase === "playing" || tableState?.round_in_progress,
   );
-  const dealerHand = roundPlaying ? (tableState?.dealer_hand ?? []) : [];
+  // Keep the finished board frozen on screen (final dealer + player hands and
+  // the result) until the player starts the next round — otherwise everything
+  // blanks out the instant the round settles.
+  const roundOver = tableState?.phase === "finished";
+  const boardActive = roundPlaying || roundOver;
+  const dealerHand = boardActive ? (tableState?.dealer_hand ?? []) : [];
   const hiddenCount = roundPlaying && hideDealerHole ? (tableState?.dealer_hidden_count ?? 0) : 0;
 
   // Use ambient dealer hand when idle and no real game
-  const displayDealerHand = roundPlaying
+  const displayDealerHand = boardActive
     ? dealerHand
     : (ambientDealerHand.length > 0 ? ambientDealerHand : []);
 
@@ -125,7 +130,7 @@ export default function TableLayout({
             const occupant = gameSeat ?? lobby;
 
             // Show ambient seat when no real occupant and table is idle
-            if (!occupant && ambientSeat && !roundPlaying) {
+            if (!occupant && ambientSeat && !boardActive) {
               return (
                 <SeatAvatar
                   key={`ambient-${slot}`}
@@ -173,11 +178,11 @@ export default function TableLayout({
                 isHuman={isHuman}
                 isActive={isActiveSeat}
                 isInactive={isInactiveSeat}
-                hand={roundPlaying ? (gameSeat?.hand ?? []) : []}
-                splitHands={roundPlaying && gameSeat?.has_split ? gameSeat.hands : undefined}
+                hand={boardActive ? (gameSeat?.hand ?? []) : []}
+                splitHands={boardActive && gameSeat?.has_split ? gameSeat.hands : undefined}
                 activeHandIndex={gameSeat?.active_hand_index}
                 handBets={gameSeat?.hand_bets}
-                bet={roundPlaying ? gameSeat?.bet : undefined}
+                bet={boardActive ? gameSeat?.bet : undefined}
                 result={gameSeat?.result}
                 dealingCards={dealingCards}
                 revealingCards={revealingCards}

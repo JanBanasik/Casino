@@ -12,7 +12,9 @@ import { useAmbientTable } from "../hooks/useAmbientTable";
 import { useAuth } from "../hooks/useAuth";
 import { useGameSocket } from "../hooks/useGameSocket";
 import { getWallet } from "../services/api";
-import type { LobbySeatPayload, SeatStatePayload } from "../types/api";
+import { DifficultyBadge } from "../components/DifficultyPicker";
+import { useReportRoundActivity } from "../hooks/useGameActivity";
+import type { Difficulty, LobbySeatPayload, SeatStatePayload } from "../types/api";
 
 const CHIP_PRESETS = [10, 25, 50, 100, 500];
 
@@ -32,6 +34,7 @@ export default function GameTablePage() {
   const tableId = searchParams.get("table") ?? "default";
   const solo = searchParams.get("solo") === "1";
   const botCountParam = parseInt(searchParams.get("bots") ?? "0", 10);
+  const difficulty = (searchParams.get("difficulty") ?? "medium") as Difficulty;
 
   const location = useLocation();
   const tableName = (location.state as { tableName?: string } | null)?.tableName;
@@ -58,9 +61,7 @@ export default function GameTablePage() {
     statusLabel,
     tableState,
     error,
-    retentionAlert,
     lastSeatAction,
-    clearRetentionAlert,
     connect,
     sit,
     placeBet,
@@ -68,7 +69,7 @@ export default function GameTablePage() {
     stand,
     double,
     split,
-  } = useGameSocket(sessionId ?? null, tableId, solo, botCount);
+  } = useGameSocket(sessionId ?? null, tableId, solo, botCount, difficulty);
 
   const { pendingCards, dealingCards, revealingCards, isDealing, resetDeal } = useDealAnimation(tableState);
 
@@ -79,6 +80,9 @@ export default function GameTablePage() {
   );
   const waitingForRound = Boolean(tableState?.waiting_for_round);
   const tableIdle = !roundPlaying;
+
+  // Bonus notifications stay hidden only while a hand is actually being played.
+  useReportRoundActivity(roundPlaying);
 
   const seats: SeatStatePayload[] = useMemo(() => {
     if (tableState?.seats?.length) return tableState.seats;
@@ -118,13 +122,20 @@ export default function GameTablePage() {
     if (sessionId && token) connect();
   }, [sessionId, tableId, token, connect]);
 
-  // Odśwież saldo po każdej zmianie stanu (z małym opóźnieniem by bank DB zdążył)
+  // Refresh the balance only on phase transitions (not on every card), and wait
+  // for the animation to land before showing the settled amount — on a finished
+  // round that means after the dealer reveal + result overlay (like roulette).
+  const balancePhaseRef = useRef<string | undefined>(undefined);
   useEffect(() => {
+    const phase = tableState?.phase;
+    if (phase === balancePhaseRef.current) return;
+    balancePhaseRef.current = phase;
+    const delay = phase === "finished" ? 1500 : 400;
     const t = setTimeout(() => {
       getWallet().then((w) => setBalance(w.balance)).catch(() => undefined);
-    }, 350);
+    }, delay);
     return () => clearTimeout(t);
-  }, [tableState]);
+  }, [tableState?.phase]);
 
   // Show win/loss overlay when round finishes — skip initial load snapshot
   useEffect(() => {
@@ -301,6 +312,8 @@ export default function GameTablePage() {
           <h1>{tableName ?? tableMeta?.name ?? "Blackjack"}</h1>
           <p className="table-subtitle">
             {tableMeta?.dealerName ?? "Krupier"} · {solo ? "Gra solo" : `Do ${botCount + 1} graczy`}
+            {" · "}
+            <DifficultyBadge value={difficulty} />
           </p>
         </div>
         <div className="game-room-stats">
@@ -318,16 +331,6 @@ export default function GameTablePage() {
           </Link>
         </div>
       </div>
-
-      {retentionAlert && (
-        <div className="toast toast--bonus container" onClick={clearRetentionAlert}>
-          <div className="toast-icon">🎁</div>
-          <div>
-            <div className="toast-title">{retentionAlert}</div>
-            <div className="toast-sub">Bonus za pechową serię 3 przegranych — żetony dodane do salda!</div>
-          </div>
-        </div>
-      )}
 
       {status !== "connected" && !tableState && (
         <div className="table-connecting container">

@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 export default function PromotionsPage() {
   return (
     <div className="container page">
@@ -8,18 +10,36 @@ export default function PromotionsPage() {
 
       <div className="promo-grid">
         <article className="promo-tile promo-tile--gold">
-          <span className="promo-tag">Aktywna</span>
-          <h2>Bonus passy</h2>
+          <span className="promo-tag">Powitalna</span>
+          <h2>Bonus na start</h2>
           <p>
-            Czasem pechowa seria to tylko początek szczęśliwej passy. Graj dalej —
-            niespodzianki czekają przy stole.
+            Każde nowe konto zaczyna z pakietem żetonów na powitanie — wystarczy,
+            by od razu spróbować wszystkich gier.
           </p>
         </article>
         <article className="promo-tile">
-          <span className="promo-tag">Powitalna</span>
-          <h2>Pierwsze żetony</h2>
+          <span className="promo-tag">Codziennie</span>
+          <h2>Dzienny bonus</h2>
           <p>
-            Doładuj portfel w sekcji „Konto” i usiądź przy wybranym stole na żywo.
+            Wracaj codziennie po darmowe żetony. Im dłuższa seria logowań, tym
+            większa nagroda. Odbierzesz ją w sekcji{" "}
+            <Link to="/konto">„Konto”</Link>.
+          </p>
+        </article>
+        <article className="promo-tile">
+          <span className="promo-tag">Aktywna</span>
+          <h2>Zwrot za pechową serię</h2>
+          <p>
+            Pech się zdarza — co 5 przegranych z rzędu oddajemy część postawionych
+            stawek. Działa w blackjacku, pokerze i ruletce.
+          </p>
+        </article>
+        <article className="promo-tile">
+          <span className="promo-tag">Zawsze</span>
+          <h2>Koło ratunkowe</h2>
+          <p>
+            Gdy żetony się skończą, automatycznie doładujemy konto, żebyś mógł grać
+            dalej. Bez końca zabawy.
           </p>
         </article>
         <article className="promo-tile promo-tile--muted">

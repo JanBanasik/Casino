@@ -6,13 +6,52 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
-from app.api.dto import SessionCreateRequest, SessionResponse, WsTicketRequest, WsTicketResponse
+from app.api.dto import (
+    RoundHistoryItem,
+    RoundHistoryResponse,
+    SessionCreateRequest,
+    SessionResponse,
+    WsTicketRequest,
+    WsTicketResponse,
+)
 from app.core.limiter import limiter
 from app.core.ws_tickets import create_ws_ticket
-from app.db.models import GameSession, GameType, User
+from app.db.models import GameSession, GameType, Round, User
 from app.db.redis_client import get_redis
 
 router = APIRouter()
+
+
+@router.get("/history", response_model=RoundHistoryResponse)
+@limiter.limit("60/minute")
+async def round_history(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = 25,
+) -> RoundHistoryResponse:
+    limit = max(1, min(limit, 100))
+    q = (
+        select(Round, GameSession.game_type)
+        .join(GameSession, Round.session_id == GameSession.id)
+        .where(GameSession.user_id == user.id)
+        .order_by(Round.created_at.desc())
+        .limit(limit)
+    )
+    rows = (await db.execute(q)).all()
+    items = [
+        RoundHistoryItem(
+            id=rnd.id,
+            game_type=game_type.value,
+            result=rnd.result.value,
+            bet_amount=rnd.bet_amount,
+            payout_amount=rnd.payout_amount,
+            net=rnd.payout_amount - rnd.bet_amount,
+            created_at=rnd.created_at.isoformat(),
+        )
+        for rnd, game_type in rows
+    ]
+    return RoundHistoryResponse(rounds=items)
 
 
 @router.post("", response_model=SessionResponse)

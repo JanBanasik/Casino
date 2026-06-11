@@ -5,6 +5,7 @@ import SoundToggle from "../components/SoundToggle";
 import { sound } from "../lib/sound";
 import { useCountUp } from "../hooks/useCountUp";
 import { useAuth } from "../hooks/useAuth";
+import { useReportRoundActivity } from "../hooks/useGameActivity";
 import { createRouletteSession, getWallet, rouletteSpin } from "../services/api";
 import type { RouletteBetRequest } from "../services/api";
 import type { RoulettePayoutItem, RouletteSpinResult } from "../types/api";
@@ -88,6 +89,9 @@ export default function RoulettePage() {
   const [bigWin, setBigWin] = useState(false);
   const wheelRef = useRef<HTMLDivElement>(null);
   const currentDegRef = useRef(0);
+
+  // Suppress the bonus modal only while the wheel is spinning.
+  useReportRoundActivity(spinning);
 
   useEffect(() => {
     if (!token) navigate("/login", { state: { from: "/roulette" } });
@@ -176,6 +180,8 @@ export default function RoulettePage() {
         } else if (result.net < 0) {
           sound.play("lose");
         }
+        // Bonus grants (loss refund / rescue) are surfaced off-table by the
+        // must-accept NotificationCenter, never mid-game.
       }, 4200);
     } catch {
       stopSpin();

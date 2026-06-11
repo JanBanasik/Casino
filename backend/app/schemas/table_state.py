@@ -44,6 +44,7 @@ class RedisTableState(BaseModel):
     bet: float = Field(default=10.0, ge=0)
     message: str | None = None
     bot_count: int = 0
+    difficulty: str = "medium"
 
     @classmethod
     def from_multi(
@@ -53,6 +54,7 @@ class RedisTableState(BaseModel):
         user_id: UUID,
         st: MultiSeatBlackjackState,
         bot_count: int = 0,
+        difficulty: str = "medium",
     ) -> RedisTableState:
         human = st.human_seat()
         return cls(
@@ -89,6 +91,7 @@ class RedisTableState(BaseModel):
             bet=human.bet,
             message=st.message,
             bot_count=bot_count,
+            difficulty=difficulty,
         )
 
     def to_multi(self) -> MultiSeatBlackjackState:

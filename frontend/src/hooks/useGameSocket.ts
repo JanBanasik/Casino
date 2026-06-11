@@ -15,6 +15,7 @@ export function useGameSocket(
   tableId = "default",
   solo = false,
   botCount = 0,
+  difficulty = "medium",
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>("idle");
@@ -85,10 +86,16 @@ export function useGameSocket(
           return;
         }
         if ("type" in data && data.type === "state") {
-          setTableState((data as WsStateMessage).payload);
-          if ((data as WsStateMessage).payload.retention?.bad_beat_bonus) {
+          const payload = (data as WsStateMessage).payload;
+          setTableState(payload);
+          const r = payload.retention;
+          if (r?.loss_refund) {
             setRetentionAlert(
-              `Szczęście się odwraca! +${(data as WsStateMessage).payload.retention?.amount} żetonów`,
+              `Zwrot za pechową serię: +${Math.round(r.loss_refund_amount ?? 0)} Ż`,
+            );
+          } else if (r?.rescue) {
+            setRetentionAlert(
+              `Koło ratunkowe — doładowano +${Math.round(r.rescue_amount ?? 0)} Ż`,
             );
           }
           return;
@@ -153,10 +160,11 @@ export function useGameSocket(
           bet,
           solo,
           bot_count: solo ? 0 : botCount,
+          difficulty,
         }),
       );
     },
-    [sessionId, solo, botCount],
+    [sessionId, solo, botCount, difficulty],
   );
 
   const hit = useCallback(() => {
