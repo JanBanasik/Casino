@@ -150,6 +150,8 @@ def _rank_val(card: str) -> int:
 def hand_rank(cards: list[str]) -> tuple:
     """Return a comparable tuple for a 5-card hand. Higher = better."""
     assert len(cards) == 5
+    from collections import Counter
+
     vals = sorted([_rank_val(c) for c in cards], reverse=True)
     suits = [_card_suit(c) for c in cards]
     is_flush = len(set(suits)) == 1
@@ -160,26 +162,30 @@ def hand_rank(cards: list[str]) -> tuple:
         is_straight = True
         vals = [3, 2, 1, 0, -1]  # 5-high straight
 
-    from collections import Counter
-    counts = sorted(Counter(vals).values(), reverse=True)
+    counts = Counter(vals)
+    count_pattern = sorted(counts.values(), reverse=True)
+    # Tie-break order: cards that form the bigger group first (pairs/trips/quads),
+    # then by rank — so a pair of Kings always beats a pair of 2s regardless of
+    # kickers, and kickers are compared in descending order.
+    ordered = sorted(vals, key=lambda v: (counts[v], v), reverse=True)
 
     if is_straight and is_flush:
-        return (8, vals)          # Straight flush
-    if counts[0] == 4:
-        return (7, vals)          # Four of a kind
-    if counts[:2] == [3, 2]:
-        return (6, vals)          # Full house
+        return (8, ordered)       # Straight flush
+    if count_pattern[0] == 4:
+        return (7, ordered)       # Four of a kind
+    if count_pattern[:2] == [3, 2]:
+        return (6, ordered)       # Full house
     if is_flush:
-        return (5, vals)          # Flush
+        return (5, ordered)       # Flush
     if is_straight:
-        return (4, vals)          # Straight
-    if counts[0] == 3:
-        return (3, vals)          # Three of a kind
-    if counts[:2] == [2, 2]:
-        return (2, vals)          # Two pair
-    if counts[0] == 2:
-        return (1, vals)          # One pair
-    return (0, vals)              # High card
+        return (4, ordered)       # Straight
+    if count_pattern[0] == 3:
+        return (3, ordered)       # Three of a kind
+    if count_pattern[:2] == [2, 2]:
+        return (2, ordered)       # Two pair
+    if count_pattern[0] == 2:
+        return (1, ordered)       # One pair
+    return (0, ordered)           # High card
 
 
 HAND_NAMES = {

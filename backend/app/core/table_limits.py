@@ -25,6 +25,21 @@ def blackjack_bet_limits(table_id: str) -> tuple[float, float]:
     return _BLACKJACK_TABLE_LIMITS.get(table_id, _DEFAULT_LIMITS)
 
 
+# ── Poker blinds (mirrors the frontend poker lobby) ───────────────────────────
+# table_id -> (small_blind, big_blind)
+_POKER_TABLE_BLINDS: dict[str, tuple[float, float]] = {
+    "poker-table-1": (5.0, 10.0),
+    "poker-table-2": (10.0, 20.0),
+    "poker-vip": (50.0, 100.0),
+}
+
+_DEFAULT_BLINDS: tuple[float, float] = (10.0, 20.0)
+
+
+def poker_table_blinds(table_id: str) -> tuple[float, float]:
+    return _POKER_TABLE_BLINDS.get(table_id, _DEFAULT_BLINDS)
+
+
 def validate_blackjack_bet(table_id: str, bet: float, client_min: float = 0.0) -> None:
     """Raise ValueError if ``bet`` violates the table's stake limits.
 

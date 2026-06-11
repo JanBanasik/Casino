@@ -8,7 +8,7 @@ import { useCountUp } from "../hooks/useCountUp";
 import { sound } from "../lib/sound";
 import { useAuth } from "../hooks/useAuth";
 import { usePokerSocket } from "../hooks/usePokerSocket";
-import { createPokerSession, getWallet } from "../services/api";
+import { createPokerSession, getGameConfig, getWallet } from "../services/api";
 import { DifficultyBadge } from "../components/DifficultyPicker";
 import { useReportRoundActivity } from "../hooks/useGameActivity";
 import type { Difficulty, PokerSeatPayload } from "../types/api";
@@ -48,8 +48,21 @@ function mapPokerError(code: string): string {
     not_seated: "Najpierw zajmij miejsce przy stole.",
     hand_in_progress: "Rozdanie już trwa.",
     no_active_hand: "Brak aktywnego rozdania.",
+    buyin_below_minimum: "Buy-in poniżej minimum stołu.",
+    buyin_above_maximum: "Buy-in powyżej maksimum stołu.",
   };
   return map[code] ?? code;
+}
+
+function formatPokerMessage(message: string): string {
+  // Engine emits "win:Name" or "win:Name1, Name2:HandName".
+  const parts = message.split(":");
+  if (parts[0] !== "win") return message;
+  const names = parts[1] ?? "";
+  const hand = parts[2];
+  const multi = names.includes(",");
+  const verb = multi ? "Wygrywają" : "Wygrywa";
+  return hand ? `${verb}: ${names} — ${hand}` : `${verb}: ${names}`;
 }
 
 function handResultLabel(result: string | null | undefined): string {
@@ -85,6 +98,7 @@ export default function PokerTablePage() {
   const navigate = useNavigate();
   const [balance, setBalance] = useState(0);
   const [buyIn, setBuyIn] = useState(100);
+  const [pokerMinBuyin, setPokerMinBuyin] = useState(50);
   const [raiseAmount, setRaiseAmount] = useState(0);
   const [sessionId, setSessionId] = useState<string | null>(urlSessionId ?? null);
   const [connecting, setConnecting] = useState(false);
@@ -136,14 +150,35 @@ export default function PokerTablePage() {
     if (sessionId && token) connect();
   }, [sessionId, token, connect]);
 
+  // Refresh the balance on phase transitions only (buy-in at hand start, payout
+  // at the end) — not on every action — and let the result land before showing
+  // the settled amount.
+  const balancePhaseRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    getWallet().then((w) => setBalance(w.balance)).catch(() => undefined);
-  }, [pokerState]);
+    const ph = pokerState?.phase;
+    if (ph === balancePhaseRef.current) return;
+    balancePhaseRef.current = ph;
+    const delay = ph === "finished" ? 800 : 300;
+    const t = setTimeout(() => {
+      getWallet().then((w) => setBalance(w.balance)).catch(() => undefined);
+    }, delay);
+    return () => clearTimeout(t);
+  }, [pokerState?.phase]);
 
   useEffect(() => {
-    const affordable = [...POKER_BUY_INS].reverse().find((b) => b <= balance) ?? POKER_BUY_INS[0];
+    getGameConfig().then((c) => setPokerMinBuyin(c.poker_min_buyin)).catch(() => undefined);
+  }, []);
+
+  // A table's minimum buy-in is the larger of the global floor and its big blind.
+  const tableMinBuyin = Math.max(pokerMinBuyin, pokerState?.big_blind ?? 20);
+
+  useEffect(() => {
+    const affordable =
+      [...POKER_BUY_INS].reverse().find((b) => b >= tableMinBuyin && b <= balance) ??
+      POKER_BUY_INS.find((b) => b >= tableMinBuyin) ??
+      POKER_BUY_INS[0];
     setBuyIn(affordable);
-  }, [balance]);
+  }, [balance, tableMinBuyin]);
 
   useEffect(() => {
     if (pokerState) {
@@ -173,7 +208,7 @@ export default function PokerTablePage() {
   const canStartHand =
     !pokerState?.round_in_progress &&
     (phase === "waiting" || phase === "finished" || pokerState?.table_phase === "idle");
-  const affordableBuyIns = POKER_BUY_INS.filter((b) => b <= balance);
+  const affordableBuyIns = POKER_BUY_INS.filter((b) => b >= tableMinBuyin && b <= balance);
   const isMyTurn =
     pokerState?.active_seat_index !== null &&
     pokerState?.active_seat_index === mySeatIndex;
@@ -491,18 +526,21 @@ export default function PokerTablePage() {
               </p>
             ) : affordableBuyIns.length === 0 ? (
               <p style={{ color: "#ef4444", margin: 0 }}>
-                Potrzebujesz co najmniej {POKER_BUY_INS[0]} Ż, aby rozpocząć grę (masz {balance} Ż).
+                Ten stół (blindy {pokerState?.small_blind ?? 5}/{pokerState?.big_blind ?? 10})
+                wymaga buy-inu co najmniej {tableMinBuyin} Ż — masz {balance} Ż.
               </p>
             ) : (
               <>
-                <span className="panel-label">Wybierz buy-in i rozpocznij rozdanie</span>
+                <span className="panel-label">
+                  Wybierz buy-in i rozpocznij rozdanie (min. {tableMinBuyin} Ż)
+                </span>
                 <div className="poker-buyin-chips">
                   {POKER_BUY_INS.map((amount) => (
                     <button
                       key={amount}
                       type="button"
                       className={`casino-chip ${buyIn === amount ? "casino-chip--active" : ""}`}
-                      disabled={amount > balance}
+                      disabled={amount > balance || amount < tableMinBuyin}
                       onClick={() => setBuyIn(amount)}
                     >
                       {amount}
@@ -516,7 +554,9 @@ export default function PokerTablePage() {
                     sound.play("chip");
                     startHand(buyIn, botCount);
                   }}
-                  disabled={buyIn > balance || statusLabel !== "Stół na żywo"}
+                  disabled={
+                    buyIn > balance || buyIn < tableMinBuyin || statusLabel !== "Stół na żywo"
+                  }
                 >
                   Rozpocznij ({buyIn} Ż)
                 </button>
@@ -528,7 +568,7 @@ export default function PokerTablePage() {
         {/* Showdown result */}
         {phase === "finished" && pokerState?.message && (
           <div className="poker-result-banner">
-            {pokerState.message}
+            {formatPokerMessage(pokerState.message)}
           </div>
         )}
 
