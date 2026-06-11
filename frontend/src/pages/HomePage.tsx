@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import GameCard from "../components/GameCard";
+import DailyBonusWidget from "../components/DailyBonusWidget";
 import { GAMES, LIVE_TABLES } from "../data/games";
 
 export default function HomePage() {
@@ -10,6 +11,7 @@ export default function HomePage() {
 
   return (
     <>
+      <DailyBonusWidget />
       <section className="hero">
         <div className="hero-bg" />
         <div className="container hero-content">

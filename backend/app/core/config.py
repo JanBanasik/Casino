@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     bonus_rescue_target: float = 200.0
     bonus_rescue_cooldown_minutes: int = 60
 
+    # ── Difficulty payout boost ───────────────────────────────────────────────
+    # Multiplier applied to the *net winnings* (profit above the stake) so that
+    # harder tables pay out more. 1.0 = standard even-money/blackjack payout.
+    win_multiplier_easy: float = 0.75
+    win_multiplier_medium: float = 1.0
+    win_multiplier_hard: float = 1.25
+
     # ── Payments (Stripe) ─────────────────────────────────────────────────────
     # Exchange rate: 1 unit of fiat buys this many chips. Default 5 ⇒ a chip is
     # worth 0.20 zł, i.e. one fiat unit equals the smallest stake in any game.

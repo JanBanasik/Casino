@@ -52,6 +52,10 @@ def test_payment_config_exposes_rate(client):
 
 # ── Purchase (dev simulation when Stripe disabled) ─────────────────────────────
 @pytest.mark.integration
+@pytest.mark.skipif(
+    settings.stripe_enabled,
+    reason="Stripe configured — checkout returns a hosted URL instead of crediting directly",
+)
 def test_dev_purchase_credits_chips(client):
     h = _auth(client, "buy")
     before = client.get("/api/wallet/me", headers=h).json()["balance"]
@@ -81,7 +85,6 @@ def test_withdraw_below_minimum_rejected(client):
 @pytest.mark.integration
 def test_withdraw_rejects_bad_account(client):
     h = _auth(client, "wd_bad")
-    client.post("/api/payments/checkout", json={"chips": 1000}, headers=h)
     res = client.post(
         "/api/payments/withdraw",
         json={"chips": 250, "account_number": "123"},
@@ -93,8 +96,8 @@ def test_withdraw_rejects_bad_account(client):
 
 @pytest.mark.integration
 def test_withdraw_success_deducts_balance(client):
+    # The welcome bonus already funds the wallet above the withdrawal minimum.
     h = _auth(client, "wd_ok")
-    client.post("/api/payments/checkout", json={"chips": 1000}, headers=h)
     before = client.get("/api/wallet/me", headers=h).json()["balance"]
     res = client.post(
         "/api/payments/withdraw",

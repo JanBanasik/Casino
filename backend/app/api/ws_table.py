@@ -91,11 +91,13 @@ async def _run_deal_sequence(
     solo: bool,
     bot_count: int,
     difficulty: str,
+    min_bet: float,
 ) -> None:
     """Full deal + bot-thinking sequence with incremental state updates."""
     # 1. Deal cards — send initial state (all cards fly in simultaneously-staggered)
     _, initial_public, _, total_players = await svc.begin_round(
-        user_id, sid, table_id, bet, solo=solo, bot_count=bot_count, difficulty=difficulty
+        user_id, sid, table_id, bet, solo=solo, bot_count=bot_count,
+        difficulty=difficulty, min_bet=min_bet,
     )
     await websocket.send_json({"type": "state", "payload": initial_public})
 
@@ -214,10 +216,11 @@ async def table_ws(websocket: WebSocket, table_id: str) -> None:
                             solo = bool(msg.get("solo", False))
                             bot_count = int(msg.get("bot_count", 0))
                             difficulty = str(msg.get("difficulty", "medium"))
+                            min_bet = float(msg.get("min_bet", 0))
                             # Incremental: deal → animate → bots think → human's turn
                             await _run_deal_sequence(
                                 websocket, svc, user_id, sid, table_id,
-                                bet, solo, bot_count, difficulty,
+                                bet, solo, bot_count, difficulty, min_bet,
                             )
                         case "action":
                             raw_action = str(msg.get("action", "")).upper()

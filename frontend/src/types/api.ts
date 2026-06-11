@@ -172,6 +172,12 @@ export interface NotificationListResponse {
   notifications: NotificationItem[];
 }
 
+export interface GameConfigResponse {
+  win_multiplier_easy: number;
+  win_multiplier_medium: number;
+  win_multiplier_hard: number;
+}
+
 export interface PaymentConfigResponse {
   stripe_enabled: boolean;
   publishable_key: string;

@@ -12,6 +12,7 @@ from app.ml_inference.registry import (
     get_poker_policy,
     normalize_difficulty,
 )
+from app.services.payouts import boost_credit, difficulty_win_multiplier, round_chips
 
 
 def _u(prefix: str) -> str:
@@ -41,6 +42,54 @@ def test_poker_easy_medium_mapping():
 def test_registry_caches_instances():
     assert get_blackjack_policy("easy") is get_blackjack_policy("easy")
     assert get_poker_policy("medium") is get_poker_policy("medium")
+
+
+# ── Difficulty payout boost ────────────────────────────────────────────────────
+def test_win_multiplier_matches_settings_and_is_monotonic():
+    from app.core.config import settings
+
+    assert difficulty_win_multiplier("easy") == settings.win_multiplier_easy
+    assert difficulty_win_multiplier("medium") == settings.win_multiplier_medium
+    assert difficulty_win_multiplier("hard") == settings.win_multiplier_hard
+    # Harder is never worse than easier, whatever the configured values.
+    assert (
+        difficulty_win_multiplier("easy")
+        <= difficulty_win_multiplier("medium")
+        <= difficulty_win_multiplier("hard")
+    )
+
+
+def test_boost_credit_scales_only_winning_profit():
+    # Only the profit above the stake is scaled by the level's multiplier.
+    for level in ("easy", "medium", "hard"):
+        mult = difficulty_win_multiplier(level)
+        import math
+        assert boost_credit(200, 100, level) == math.ceil(100 + 100 * mult)
+        # Losses (credit 0) and draws (credit == stake) are never boosted.
+        assert boost_credit(0, 100, level) == 0
+        assert boost_credit(100, 100, level) == 100
+
+
+def test_round_chips_is_half_up():
+    # Mathematical rounding, halves go up.
+    assert round_chips(1.25) == 1
+    assert round_chips(1.5) == 2
+    assert round_chips(1.75) == 2
+    assert round_chips(2.4) == 2
+    assert round_chips(2.5) == 3
+
+
+def test_boost_credit_rounds_to_nearest_whole_chip():
+    import math
+
+    # The credited amount is never fractional and uses half-up rounding.
+    for level in ("easy", "medium", "hard"):
+        mult = difficulty_win_multiplier(level)
+        # 3:2 natural on a 25 stake → 62.5 credit, then the level multiplier.
+        raw = 25 + (62.5 - 25) * mult
+        out = boost_credit(62.5, 25, level)
+        assert out == math.floor(raw + 0.5)   # nearest whole chip, halves up
+        assert out == int(out)                # whole chips only
 
 
 # ── Bonus economy via the API ─────────────────────────────────────────────────
