@@ -70,26 +70,6 @@ export default function LiveCasinoPage() {
     }
   }
 
-  async function handleSoloQuick() {
-    if (!token) {
-      navigate("/login", { state: { from: "/stoły" } });
-      return;
-    }
-    setError(null);
-    setJoiningId("solo");
-    try {
-      const session = await createSession("blackjack");
-      // Private table per solo session (see handleJoin) — never the shared "default".
-      navigate(`/graj/${session.id}?table=solo-${session.id}&solo=1&difficulty=${difficulty}&min=10`, {
-        state: { tableName: "Blackjack — Gra solo", minBet: 10 },
-      });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Nie udało się rozpocząć gry");
-    } finally {
-      setJoiningId(null);
-    }
-  }
-
   async function handleJoinPoker(tableId: string) {
     if (!token) {
       navigate("/login", { state: { from: "/stoły" } });
@@ -138,22 +118,6 @@ export default function LiveCasinoPage() {
       </div>
 
       {/* ── Blackjack ── */}
-      <article className="solo-card">
-        <div>
-          <span className="live-badge">SOLO</span>
-          <h2>Blackjack solo</h2>
-          <p>Tylko ty i krupier — idealne na szybką rundę bez czekania.</p>
-        </div>
-        <button
-          type="button"
-          className="btn btn-gold"
-          disabled={joiningId === "solo"}
-          onClick={handleSoloQuick}
-        >
-          {joiningId === "solo" ? "Dołączanie…" : "Graj solo"}
-        </button>
-      </article>
-
       <h2 className="page-section-title">Blackjack — stoły wieloosobowe</h2>
       <div className="live-tables-grid">
         {LIVE_TABLES.map((table) => (

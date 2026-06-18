@@ -194,21 +194,7 @@ export default function TableLayout({
           })}
         </div>
 
-        {tableState?.message && tableState.message !== "wait_round_end" && (
-          <p className="round-message table-message">{resultMessage(tableState.message)}</p>
-        )}
       </div>
     </div>
   );
-}
-
-function resultMessage(msg: string): string {
-  const map: Record<string, string> = {
-    win: "Wygrana!",
-    loss: "Przegrana",
-    draw: "Remis",
-    player_bust: "Fura!",
-    dealer_bust: "Krupier ma furę!",
-  };
-  return map[msg] ?? msg;
 }

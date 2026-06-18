@@ -5,7 +5,9 @@ WORKDIR /app
 RUN pip install --no-cache-dir uv
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
+# Include the optional "payments" group so the Stripe SDK is available for real
+# Checkout. (The "ml" group stays out — bots fall back to BasicStrategy.)
+RUN uv sync --frozen --no-dev --group payments
 
 COPY alembic.ini ./
 COPY alembic ./alembic
