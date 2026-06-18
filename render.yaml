@@ -35,8 +35,7 @@ services:
     dockerfilePath: backend/Dockerfile
     dockerContext: backend
     healthCheckPath: /api/health
-    # Run migrations, then bind Render's assigned $PORT.
-    dockerCommand: sh -c "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    # Startup (migrate + bind $PORT) is the image CMD — see backend/Dockerfile.
     envVars:
       - key: DATABASE_URL
         fromDatabase:
