@@ -202,8 +202,10 @@ class PokerRoundService:
             )
             await self.session.commit()
             display_lobby = lobby.with_ambient_bots(table_id)
+            # Keep phase "finished" so the client shows the showdown, the win
+            # notification and confetti. round_in_progress=False + table_phase
+            # "idle" still let the player start the next hand.
             public = st.to_public_dict(table_phase="idle")
-            public["phase"] = "waiting"
             public["lobby_seats"] = display_lobby.to_public()
             public["my_seat_index"] = seat_idx
             public["round_in_progress"] = False
@@ -277,8 +279,10 @@ class PokerRoundService:
                 st, loaded.session_id, user_id, WalletService(self.session), loaded.difficulty
             )
             await self.session.commit()
+            # Keep phase "finished" so the client shows the showdown, the win
+            # notification and confetti. round_in_progress=False + table_phase
+            # "idle" still let the player start the next hand.
             out = st.to_public_dict(table_phase="idle")
-            out["phase"] = "waiting"
             out["lobby_seats"] = display_lobby.to_public()
             out["my_seat_index"] = self._lobby_seat_index(lobby, user_id)
             out["round_in_progress"] = False

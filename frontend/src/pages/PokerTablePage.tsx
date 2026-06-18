@@ -106,6 +106,7 @@ export default function PokerTablePage() {
   const [bigWin, setBigWin] = useState(false);
 
   const {
+    status,
     statusLabel,
     pokerState,
     error,
@@ -126,25 +127,17 @@ export default function PokerTablePage() {
     if (!token) navigate("/login", { state: { from: "/stoły" } });
   }, [token, navigate]);
 
+  // Create a poker session if we don't have one yet. Connecting is handled by
+  // the effect below — doing it here too opened TWO sockets, and the auto-sit
+  // would race against whichever one wsRef happened to point at.
   useEffect(() => {
-    if (!token) return;
-    async function init() {
-      if (sessionId) {
-        connect();
-        return;
-      }
-      setConnecting(true);
-      try {
-        const session = await createPokerSession();
-        setSessionId(session.id);
-      } catch {
-        // Will show error
-      } finally {
-        setConnecting(false);
-      }
-    }
-    init();
-  }, [token]);
+    if (!token || sessionId) return;
+    setConnecting(true);
+    createPokerSession()
+      .then((session) => setSessionId(session.id))
+      .catch(() => undefined)
+      .finally(() => setConnecting(false));
+  }, [token, sessionId]);
 
   useEffect(() => {
     if (sessionId && token) connect();
@@ -187,15 +180,21 @@ export default function PokerTablePage() {
     }
   }, [pokerState]);
 
-  // Auto-sit at seat 0 when connected and not yet seated
+  // Auto-sit at seat 0 when connected and not yet seated. Gate on the socket
+  // actually being live (sit() no-ops while the WS isn't OPEN) and re-run on
+  // (re)connect, so a sit attempt is never silently lost — otherwise the player
+  // gets stuck on "select a seat first" with no manual seat picker to recover.
   useEffect(() => {
-    if (pokerState && pokerState.my_seat_index === null && sessionId) {
+    if (status === "connected" && pokerState && pokerState.my_seat_index == null && sessionId) {
       sit(0);
     }
-  }, [pokerState?.my_seat_index, sessionId, sit]);
+  }, [pokerState?.my_seat_index, sessionId, sit, status]);
 
   const mySeatIndex = pokerState?.my_seat_index ?? pokerState?.human_seat_index ?? null;
-  const isSeated = mySeatIndex !== null && mySeatIndex !== undefined;
+  // Seated status must reflect the *lobby* (my_seat_index), not human_seat_index
+  // — the idle snapshot defaults human_seat_index to 0, which would otherwise
+  // make us look seated and show the Start button before we actually sat.
+  const isSeated = pokerState?.my_seat_index != null;
   const phase = pokerState?.phase ?? "waiting";
   const seats = pokerState?.seats ?? [];
   const communityCards = pokerState?.community_cards ?? [];

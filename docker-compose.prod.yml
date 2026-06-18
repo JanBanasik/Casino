@@ -1,5 +1,6 @@
 services:
   postgres:
+    restart: unless-stopped
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-casino}
@@ -14,6 +15,7 @@ services:
       retries: 5
 
   redis:
+    restart: unless-stopped
     image: redis:7-alpine
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -22,6 +24,7 @@ services:
       retries: 5
 
   backend:
+    restart: unless-stopped
     build:
       context: ./backend
     environment:
@@ -30,6 +33,16 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY}
       DEBUG: "false"
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      # ── Payments (Stripe) ──────────────────────────────────────────────────
+      # Leave the keys unset to keep the dev "simulation" mode (chips credited
+      # instantly, no real charge). Set them in .env to enable real Checkout.
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      # Where Stripe Checkout returns the player. Defaults to the prod port (the
+      # frontend is served on :8080); override per-deployment via .env.
+      PAYMENT_SUCCESS_URL: ${PAYMENT_SUCCESS_URL:-http://localhost:8080/konto?purchase=success}
+      PAYMENT_CANCEL_URL: ${PAYMENT_CANCEL_URL:-http://localhost:8080/konto?purchase=cancel}
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,6 +53,7 @@ services:
              uv run uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
   frontend:
+    restart: unless-stopped
     build:
       context: ./frontend
     ports:
