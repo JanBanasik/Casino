@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,6 +10,17 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://casino:casino@localhost:15432/casino"
     redis_url: str = "redis://localhost:16379/0"
+
+    @field_validator("database_url")
+    @classmethod
+    def _force_asyncpg_driver(cls, v: str) -> str:
+        # Managed hosts (Render, Heroku, …) hand out a bare `postgres://` /
+        # `postgresql://` URL, but our async stack needs the asyncpg driver.
+        if v.startswith("postgres://"):
+            return "postgresql+asyncpg://" + v[len("postgres://"):]
+        if v.startswith("postgresql://") and "+" not in v.split("://", 1)[0]:
+            return "postgresql+asyncpg://" + v[len("postgresql://"):]
+        return v
 
     jwt_secret_key: str = "change-me-in-production-use-openssl-rand-hex-32"
     jwt_algorithm: str = "HS256"
