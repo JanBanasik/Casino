@@ -106,6 +106,7 @@ export default function PokerTablePage() {
   const [bigWin, setBigWin] = useState(false);
 
   const {
+    status,
     statusLabel,
     pokerState,
     error,
@@ -187,12 +188,15 @@ export default function PokerTablePage() {
     }
   }, [pokerState]);
 
-  // Auto-sit at seat 0 when connected and not yet seated
+  // Auto-sit at seat 0 when connected and not yet seated. Gate on the socket
+  // actually being live (sit() no-ops while the WS isn't OPEN) and re-run on
+  // (re)connect, so a sit attempt is never silently lost — otherwise the player
+  // gets stuck on "select a seat first" with no manual seat picker to recover.
   useEffect(() => {
-    if (pokerState && pokerState.my_seat_index === null && sessionId) {
+    if (status === "connected" && pokerState && pokerState.my_seat_index == null && sessionId) {
       sit(0);
     }
-  }, [pokerState?.my_seat_index, sessionId, sit]);
+  }, [pokerState?.my_seat_index, sessionId, sit, status]);
 
   const mySeatIndex = pokerState?.my_seat_index ?? pokerState?.human_seat_index ?? null;
   const isSeated = mySeatIndex !== null && mySeatIndex !== undefined;
