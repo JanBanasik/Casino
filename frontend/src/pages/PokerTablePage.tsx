@@ -127,25 +127,17 @@ export default function PokerTablePage() {
     if (!token) navigate("/login", { state: { from: "/stoły" } });
   }, [token, navigate]);
 
+  // Create a poker session if we don't have one yet. Connecting is handled by
+  // the effect below — doing it here too opened TWO sockets, and the auto-sit
+  // would race against whichever one wsRef happened to point at.
   useEffect(() => {
-    if (!token) return;
-    async function init() {
-      if (sessionId) {
-        connect();
-        return;
-      }
-      setConnecting(true);
-      try {
-        const session = await createPokerSession();
-        setSessionId(session.id);
-      } catch {
-        // Will show error
-      } finally {
-        setConnecting(false);
-      }
-    }
-    init();
-  }, [token]);
+    if (!token || sessionId) return;
+    setConnecting(true);
+    createPokerSession()
+      .then((session) => setSessionId(session.id))
+      .catch(() => undefined)
+      .finally(() => setConnecting(false));
+  }, [token, sessionId]);
 
   useEffect(() => {
     if (sessionId && token) connect();
@@ -199,7 +191,10 @@ export default function PokerTablePage() {
   }, [pokerState?.my_seat_index, sessionId, sit, status]);
 
   const mySeatIndex = pokerState?.my_seat_index ?? pokerState?.human_seat_index ?? null;
-  const isSeated = mySeatIndex !== null && mySeatIndex !== undefined;
+  // Seated status must reflect the *lobby* (my_seat_index), not human_seat_index
+  // — the idle snapshot defaults human_seat_index to 0, which would otherwise
+  // make us look seated and show the Start button before we actually sat.
+  const isSeated = pokerState?.my_seat_index != null;
   const phase = pokerState?.phase ?? "waiting";
   const seats = pokerState?.seats ?? [];
   const communityCards = pokerState?.community_cards ?? [];
