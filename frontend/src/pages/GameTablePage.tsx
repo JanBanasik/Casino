@@ -5,7 +5,6 @@ import SoundToggle from "../components/SoundToggle";
 import TableActionBanner from "../components/TableActionBanner";
 import TableLayout from "../components/TableLayout";
 import { LIVE_TABLES } from "../data/games";
-import { useCountUp } from "../hooks/useCountUp";
 import { sound } from "../lib/sound";
 import { useDealAnimation } from "../hooks/useDealAnimation";
 import { useAmbientTable } from "../hooks/useAmbientTable";
@@ -56,12 +55,7 @@ export default function GameTablePage() {
   const navigate = useNavigate();
   const [balance, setBalance] = useState(0);
   const [bet, setBet] = useState(minBet);
-  const [roundResult, setRoundResult] = useState<{
-    label: string;
-    net: number;
-    type: "win" | "loss" | "draw";
-    big: boolean;
-  } | null>(null);
+  const [bigWin, setBigWin] = useState(false);
   const [confettiKey, setConfettiKey] = useState(0);
   const prevPhaseRef = useRef<string | undefined>(undefined);
 
@@ -156,27 +150,22 @@ export default function GameTablePage() {
     if (currentPhase !== "finished" || prev === "finished" || prev === undefined) return;
     if (!tableState?.message) return;
 
-    const msg = tableState.message;
-    const labelMap: Record<string, string> = {
-      win: "Wygrana!", loss: "Przegrana", draw: "Remis",
-      player_bust: "Fura!", dealer_bust: "Krupier ma furę!",
-    };
     const mySeat = tableState.seats?.find((s) => s.seat_index === mySeatIndex);
     const net = (mySeat?.payout ?? 0) - (mySeat?.bet ?? 0);
     const type = net > 0 ? "win" : net < 0 ? "loss" : "draw";
     const big = net >= (mySeat?.bet ?? 0) * 2 || net >= 200;
 
-    setRoundResult({ label: labelMap[msg] ?? msg, net, type, big });
+    // No centered result card — just audio + confetti feedback; the balance
+    // updates on its own a moment later.
     if (type === "win") {
       sound.play(big ? "bigwin" : "win");
+      setBigWin(big);
       setConfettiKey((k) => k + 1);
     } else if (type === "loss") {
       sound.play("lose");
     } else {
       sound.play("draw");
     }
-    const t = setTimeout(() => setRoundResult(null), 2600);
-    return () => clearTimeout(t);
   }, [tableState?.phase, tableState?.message]);
 
   // Clear deal animation and stale cards when the table returns to idle.
@@ -315,8 +304,7 @@ export default function GameTablePage() {
 
   return (
     <div className="game-room">
-      <ConfettiBurst fireKey={confettiKey} big={roundResult?.big ?? false} />
-      {roundResult && <RoundResultOverlay result={roundResult} />}
+      <ConfettiBurst fireKey={confettiKey} big={bigWin} />
       <div className="game-room-topbar container">
         <div>
           <Link to="/stoły" className="back-link">← Stoły na żywo</Link>
@@ -412,33 +400,6 @@ export default function GameTablePage() {
         )}
 
         {error && <p className="form-error table-error">{mapError(error)}</p>}
-      </div>
-    </div>
-  );
-}
-
-function RoundResultOverlay({
-  result,
-}: {
-  result: { label: string; net: number; type: "win" | "loss" | "draw"; big: boolean };
-}) {
-  const animated = useCountUp(Math.abs(result.net), result.label);
-  const rounded = Math.round(animated);
-  const amountStr =
-    result.type === "draw"
-      ? "Remis"
-      : `${result.type === "win" ? "+" : "−"}${rounded.toLocaleString("pl-PL")} Ż`;
-  return (
-    <div className="round-result-overlay">
-      <div
-        className={`round-result-card ${result.big ? "round-result-card--jackpot" : ""}`}
-      >
-        <div className={`round-result-card__label round-result-card__label--${result.type}`}>
-          {result.label}
-        </div>
-        <div className={`round-result-card__amount round-result-card__amount--${result.type}`}>
-          {amountStr}
-        </div>
       </div>
     </div>
   );
