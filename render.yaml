@@ -31,7 +31,6 @@ services:
     name: casino-backend
     runtime: docker
     plan: free
-    region: frankfurt
     dockerfilePath: backend/Dockerfile
     dockerContext: backend
     healthCheckPath: /api/health
@@ -70,7 +69,6 @@ services:
     name: casino-frontend
     runtime: docker
     plan: free
-    region: frankfurt
     dockerfilePath: frontend/Dockerfile
     dockerContext: frontend
     envVars:
