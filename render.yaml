@@ -1,0 +1,79 @@
+# Render Blueprint — deploy the whole casino stack on the free tier.
+#
+# Deploy: Render Dashboard → New → Blueprint → connect this repo → Apply.
+# After the first deploy, set the three Stripe secrets (sync:false) on the
+# casino-backend service: STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY,
+# STRIPE_WEBHOOK_SECRET.
+#
+# NOTE on URLs: the literal *.onrender.com URLs below assume the service names
+# are free globally. If Render appends a suffix, update BACKEND_URL (frontend)
+# and PAYMENT_SUCCESS_URL/PAYMENT_CANCEL_URL (backend) to the real URLs.
+#
+# Heads-up: free web services sleep after ~15 min idle (30–60s cold start).
+# Open both URLs a minute before the demo to warm them up.
+
+databases:
+  - name: casino-db
+    plan: free
+    databaseName: casino
+    user: casino
+
+services:
+  # ── Redis (Render "Key Value") ──────────────────────────────────────────
+  - type: redis
+    name: casino-redis
+    plan: free
+    ipAllowList: []          # internal access only
+    maxmemoryPolicy: noeviction
+
+  # ── Backend (FastAPI + uvicorn) ─────────────────────────────────────────
+  - type: web
+    name: casino-backend
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    healthCheckPath: /api/health
+    # Run migrations, then bind Render's assigned $PORT.
+    dockerCommand: sh -c "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: casino-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: casino-redis
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "false"
+      # Browser hits the frontend origin; CORS isn't used, but set it anyway.
+      - key: CORS_ORIGINS
+        value: https://casino-frontend.onrender.com
+      - key: PAYMENT_SUCCESS_URL
+        value: https://casino-frontend.onrender.com/konto?purchase=success
+      - key: PAYMENT_CANCEL_URL
+        value: https://casino-frontend.onrender.com/konto?purchase=cancel
+      # Set these three in the dashboard (kept out of git).
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+
+  # ── Frontend (nginx serving the SPA + proxying /api and /ws) ─────────────
+  - type: web
+    name: casino-frontend
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: frontend/Dockerfile
+    dockerContext: frontend
+    envVars:
+      - key: BACKEND_URL
+        value: https://casino-backend.onrender.com
