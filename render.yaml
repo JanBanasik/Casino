@@ -15,6 +15,7 @@
 databases:
   - name: casino-db
     plan: free
+    region: frankfurt
     databaseName: casino
     user: casino
 
@@ -23,6 +24,7 @@ services:
   - type: redis
     name: casino-redis
     plan: free
+    region: frankfurt
     ipAllowList: []          # internal access only
     maxmemoryPolicy: noeviction
 
@@ -31,6 +33,7 @@ services:
     name: casino-backend
     runtime: docker
     plan: free
+    region: frankfurt
     dockerfilePath: backend/Dockerfile
     dockerContext: backend
     healthCheckPath: /api/health
@@ -69,6 +72,7 @@ services:
     name: casino-frontend
     runtime: docker
     plan: free
+    region: frankfurt
     dockerfilePath: frontend/Dockerfile
     dockerContext: frontend
     envVars:
