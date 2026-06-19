@@ -1,12 +1,11 @@
 # Zrzuty ekranu
 
-Wrzuć tu pliki PNG, a pojawią się w głównym `README.md`:
+Pliki PNG wyświetlane w głównym `README.md`:
 
-| Plik | Co pokazać |
+| Plik | Widok |
 | --- | --- |
-| `lobby.png` | Strona „Stoły na żywo” — lista gier (blackjack / poker / ruletka) |
-| `blackjack.png` | Stół blackjacka w trakcie rozgrywki |
+| `lobby.png` | „Stoły na żywo" — lista gier (blackjack / poker / ruletka) |
+| `blackjack.png` | Stół blackjacka |
 | `poker.png` | Stół pokerowy (Texas Hold'em) |
-| `konto-platnosci.png` | Ekran konta z doładowaniem żetonów (Stripe) |
-
-Zalecane: zrzuty w szerokości ~1280 px, format PNG.
+| `roulette.png` | Ruletka europejska |
+| `konto-platnosci.png` | Konto z doładowaniem żetonów (Stripe) |

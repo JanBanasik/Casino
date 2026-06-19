@@ -14,13 +14,16 @@
 
 ## Zrzuty ekranu
 
-| Lobby | Blackjack |
+| Lobby — stoły na żywo | Blackjack |
 | :---: | :---: |
 | ![Lobby](docs/screenshots/lobby.png) | ![Blackjack](docs/screenshots/blackjack.png) |
-| **Poker (Texas Hold'em)** | **Konto i płatności** |
-| ![Poker](docs/screenshots/poker.png) | ![Płatności](docs/screenshots/konto-platnosci.png) |
+| **Poker (Texas Hold'em)** | **Ruletka** |
+| ![Poker](docs/screenshots/poker.png) | ![Ruletka](docs/screenshots/roulette.png) |
 
-> 📷 _Wrzuć zrzuty ekranu do katalogu `docs/screenshots/` pod nazwami `lobby.png`, `blackjack.png`, `poker.png`, `konto-platnosci.png`, a pojawią się powyżej._
+<p align="center">
+  <img src="docs/screenshots/konto-platnosci.png" alt="Konto i płatności" width="72%">
+  <br><em>Konto, portfel i płatności (Stripe)</em>
+</p>
 
 ## 1. Wstęp i Cel Projektu
 
