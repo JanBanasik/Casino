@@ -29,3 +29,6 @@ test_rl/.venv/
 # Node
 node_modules/
 frontend/dist/
+
+# Presentation — temp screenshots (Playwright path); generated deck is tracked
+presentation/_slides/

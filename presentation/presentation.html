@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inteligentne Kasyno · Pitch Deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0B0F1E; --slate:#1F293A; --muted:#64748B; --accent:#4F46E5;
+    --accent-soft:#EEF0FE; --line:#E6E8F0; --bg:#FFFFFF; --bg-soft:#F7F8FB;
+    --stage-w:1280px; --stage-h:720px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#0B0F1E;}
+  body{font-family:'Inter',system-ui,sans-serif;color:var(--slate);
+    display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  #stage{width:var(--stage-w);height:var(--stage-h);position:relative;
+    transform-origin:center center;background:var(--bg);
+    box-shadow:0 40px 120px rgba(0,0,0,.55);overflow:hidden;border-radius:6px;}
+  .slide{position:absolute;inset:0;padding:54px 72px 56px;display:none;
+    flex-direction:column;background:var(--bg);}
+  .slide.active{display:flex;}
+  .chrome-top{display:flex;justify-content:space-between;align-items:flex-start;}
+  .brand{font-weight:800;font-size:13px;letter-spacing:.14em;color:var(--ink);}
+  .eyebrow{font-weight:700;font-size:11px;letter-spacing:.16em;color:var(--accent);
+    text-transform:uppercase;margin-top:6px;}
+  .meta{text-align:right;font-size:11px;color:var(--muted);line-height:1.6;letter-spacing:.04em;}
+  .chrome-bottom{position:absolute;left:72px;right:72px;bottom:26px;display:flex;
+    justify-content:space-between;font-size:10px;color:var(--muted);
+    letter-spacing:.08em;text-transform:uppercase;}
+  h1{font-size:56px;line-height:1.04;font-weight:800;color:var(--ink);letter-spacing:-.02em;}
+  h2{font-size:42px;line-height:1.08;font-weight:800;color:var(--ink);letter-spacing:-.018em;}
+  h2.sm{font-size:34px;}
+  .lead{font-size:19px;color:var(--slate);font-weight:400;line-height:1.5;max-width:80%;}
+  .sub{font-size:16px;color:var(--muted);line-height:1.5;max-width:80%;}
+  .body{flex:1;display:flex;flex-direction:column;justify-content:center;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .cols{display:grid;gap:30px;margin-top:30px;}
+  .cols.c2{grid-template-columns:1fr 1fr;}
+  .cols.c3{grid-template-columns:repeat(3,1fr);}
+  .cols.c4{grid-template-columns:repeat(4,1fr);}
+  .blk .bt{font-size:17px;font-weight:700;color:var(--ink);margin-bottom:7px;}
+  .blk .bd{font-size:13.5px;color:var(--slate);line-height:1.5;}
+  .num{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;
+    color:var(--accent);margin-bottom:10px;}
+  .panel{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:24px 26px;}
+  .panel .ph{font-size:11px;font-weight:700;letter-spacing:.14em;color:var(--accent);
+    text-transform:uppercase;margin-bottom:14px;}
+  .li{display:flex;gap:10px;font-size:13.5px;color:var(--slate);line-height:1.5;margin:7px 0;}
+  .li .dot{color:var(--accent);font-weight:700;}
+  .pipe{display:flex;align-items:stretch;gap:0;margin-top:22px;flex-wrap:wrap;}
+  .step{flex:1;min-width:120px;background:var(--bg-soft);border:1px solid var(--line);
+    border-radius:12px;padding:16px 14px;text-align:left;}
+  .step .si{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent);font-weight:700;}
+  .step .sl{font-size:14px;font-weight:700;color:var(--ink);margin-top:6px;line-height:1.2;}
+  .step .sd{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.35;}
+  .arrow{display:flex;align-items:center;color:var(--accent);font-weight:700;font-size:18px;padding:0 8px;}
+  .callout{margin-top:24px;font-size:15px;color:var(--slate);line-height:1.55;
+    border-left:3px solid var(--accent);padding-left:16px;max-width:88%;}
+  .title-wrap{flex:1;display:flex;flex-direction:column;justify-content:center;}
+  .kicker{font-size:12px;font-weight:700;letter-spacing:.18em;color:var(--accent);
+    text-transform:uppercase;margin-bottom:22px;}
+  .title-foot{font-size:12px;color:var(--muted);letter-spacing:.04em;}
+  #pageind{position:fixed;bottom:14px;right:18px;color:#94A3B8;font-size:11px;
+    font-family:'JetBrains Mono',monospace;z-index:50;letter-spacing:.1em;}
+  #hint{position:fixed;bottom:14px;left:18px;color:#475569;font-size:11px;
+    font-family:'JetBrains Mono',monospace;z-index:50;letter-spacing:.06em;}
+  @media print{
+    body{display:block;background:#fff;}
+    #stage{box-shadow:none;border-radius:0;transform:none!important;width:100%;height:100vh;}
+    .slide{display:none;}
+    .slide.print{display:flex;page-break-after:always;}
+    #pageind,#hint{display:none;}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+<section class="slide active"><div class="chrome-top"><div><div class="brand">INTELIGENTNE KASYNO</div><div class="eyebrow" style="color:var(--muted);font-weight:400">PITCH  /  v1</div></div><div class="meta">Projekt zespołowy · Inżynieria oprogramowania<br>Czerwiec 2026</div></div><div class="title-wrap"><div class="kicker">Reinforcement learning · gry hazardowe online</div><h1>Kasyno, w którym grasz<br>przeciwko agentom RL.</h1><p class="lead" style="margin-top:26px;">Pełnowymiarowa platforma gier — blackjack, poker i ruletka — gdzie przeciwnikami są boty uczone metodami uczenia ze wzmocnieniem. Gra w czasie rzeczywistym, wirtualny portfel i płatności.</p></div><div class="title-foot">Inteligentne Kasyno · FastAPI + React · Q-Learning & PPO · wdrożone na Render</div></section>
+<section class="slide"><div class="chrome-top"><div><div class="brand">INTELIGENTNE KASYNO</div><div class="eyebrow">01 / Problem</div></div><div class="meta">Inteligentne Kasyno · Inżynieria oprogramowania<br>Czerwiec 2026 · 2 / 12</div></div><div class="body"><h2 class="sm">Gry o niepełnej informacji to twardy problem.</h2><p class="sub" style="margin-top:14px;">Blackjack i poker to nie czysta logika — to decyzje pod niepewnością, z ukrytą informacją i losowością.</p><div class="cols c3"><div class="blk"><div class="num">01</div><div class="bt">Ukryta informacja</div><div class="bd">Karty przeciwnika i krupiera są zakryte. Decyzję podejmujesz na podstawie prawdopodobieństw, nie pewności.</div></div><div class="blk"><div class="num">02</div><div class="bt">Losowość i wariancja</div><div class="bd">Dobra decyzja może przegrać rundę. Jakość gry widać dopiero po wielu rozdaniach.</div></div><div class="blk"><div class="num">03</div><div class="bt">Retencja gracza</div><div class="bd">Kasyno musi być nie tylko sprawne, ale i wciągające — portfel, bonusy, płatności.</div></div></div><div class="callout">Dlatego boty nie są skryptem „if-else”. To polityki uczone na symulowanych rozdaniach — z gradacją trudności.</div></div><div class="chrome-bottom"><span>Inteligentne Kasyno · projekt zespołowy</span><span>Problem</span></div></section>
+<section class="slide"><div class="chrome-top"><div><div class="brand">INTELIGENTNE KASYNO</div><div class="eyebrow">02 / Produkt</div></div><div class="meta">Inteligentne Kasyno · Inżynieria oprogramowania<br>Czerwiec 2026 · 3 / 12</div></div><div class="body"><h2 class="sm">Co zbudowaliśmy.</h2><p class="sub" style="margin-top:14px;">Webowa platforma kasyna z grą w czasie rzeczywistym przeciw agentom AI.</p><div class="cols c3"><div class="blk"><div class="num">01</div><div class="bt">Trzy gry</div><div class="bd">Blackjack, Texas Hold'em i ruletka europejska — stoły solo i wieloosobowe.</div></div><div class="blk"><div class="num">02</div><div class="bt">Przeciwnicy AI</div><div class="bd">Boty na trzech poziomach trudności, od losowych po uczone głęboko (PPO).</div></div><div class="blk"><div class="num">03</div><div class="bt">Pełny portfel</div><div class="bd">Rejestracja, wirtualne żetony, historia transakcji i płatności Stripe.</div></div></div><div class="callout">Frontend React + nginx, backend FastAPI, stan na żywo w Redisie — wszystko w Dockerze, wdrożone w chmurze.</div></div><div class="chrome-bottom"><span>Inteligentne Kasyno · projekt zespołowy</span><span>Co zbudowaliśmy</span></div></section>
+<section class="slide"><div class="chrome-top"><div><div class="brand">INTELIGENTNE KASYNO</div><div class="eyebrow">03 / Architektura</div></div><div class="meta">Inteligentne Kasyno · Inżynieria oprogramowania<br>Czerwiec 2026 · 4 / 12</div></div><div class="body"><h2 class="sm">Jedna pętla: akcja → stan → ruch bota → wynik.</h2><p class="sub" style="margin-top:12px;">Logika gier (engine) jest odseparowana od warstwy webowej — Clean Architecture.</p><div class="pipe"><div class="step"><div class="si">01</div><div class="sl">Klient</div><div class="sd">React + TS · HTTP + WebSocket</div></div><div class="arrow">›</div><div class="step"><div class="si">02</div><div class="sl">FastAPI</div><div class="sd">REST + WS · autoryzacja JWT</div></div><div class="arrow">›</div><div class="step"><div class="si">03</div><div class="sl">Serwisy</div><div class="sd">Silnik gry · obsługa rundy</div></div><div class="arrow">›</div><div class="step"><div class="si">04</div><div class="sl">Redis / PG</div><div class="sd">Gorący stan O(1) · dane ACID</div></div><div class="arrow">›</div><div class="step"><div class="si">05</div><div class="sl">Modele RL</div><div class="sd">Inferencja ruchu bota</div></div></div><div class="callout">Redis trzyma „gorący” stan aktywnych stołów, by nie obciążać PostgreSQL przy każdym ruchu; Postgres trzyma konta, portfele i historię.</div></div><div class="chrome-bottom"><span>Inteligentne Kasyno · projekt zespołowy</span><span>Architektura</span></div></section>
+<section class="slide"><div class="chrome-top"><div><div class="brand">INTELIGENTNE KASYNO</div><div class="eyebrow">04 / Technologia</div></div><div class="meta">Inteligentne Kasyno · Inżynieria oprogramowania<br>Czerwiec 2026 · 5 / 12</div></div><div class="body"><h2 class="sm">Stos technologiczny.</h2><div class="cols c4"><div class="blk"><div class="num">BE</div><div class="bt">Backend</div><div class="bd">FastAPI (async), Python 3.11, Pydantic v2, SQLAlchemy + asyncpg, Alembic.</div></div><div class="blk"><div class="num">DB</div><div class="bt">Dane</div><div class="bd">PostgreSQL (ACID) na konta i portfele, Redis na stan stołów.</div></div><div class="blk"><div class="num">FE</div><div class="bt">Frontend</div><div class="bd">React + TypeScript + Vite, serwowane przez nginx (proxy /api i /ws).</div></div><div class="blk"><div class="num">AI</div><div class="bt">AI / RL</div><div class="bd">Q-Learning (tabela) i PPO/DQN (Stable-Baselines3 + PyTorch).</div></div></div><div class="callout">WebSockets dają komunikację w czasie rzeczywistym; Stripe Checkout obsługuje płatności.</div></div><div class="chrome-bottom"><span>Inteligentne Kasyno · projekt zespołowy</span><span>Stos technologiczny</span></div></section>
+<section class="slide"><div class="chrome-top"><div><div class="brand">INTELIGENTNE KASYNO</div><div class="eyebrow">05 / Gry</div></div><div class="meta">Inteligentne Kasyno · Inżynieria oprogramowania<br>Czerwiec 2026 · 6 / 12</div></div><div class="body"><h2 class="sm">Trzy gry, jeden silnik.</h2><div class="cols c3" style="margin-top:24px;"><div class="panel"><div class="ph">Blackjack</div><div class="li"><span class="dot">·</span>Stoły solo i wieloosobowe z botami</div><div class="li"><span class="dot">·</span>Pełne zasady: krupier, podział, dobór</div><div class="li"><span class="dot">·</span>Boty od losowych po Q-Learning / PPO</div></div><div class="panel"><div class="ph">Texas Hold'em</div><div class="li"><span class="dot">·</span>Stół 6-osobowy: blindy, fazy, showdown</div><div class="li"><span class="dot">·</span>Stan rundy w czasie rzeczywistym</div><div class="li"><span class="dot">·</span>Boty od luźnego callera po politykę PPO</div></div><div class="panel"><div class="ph">Ruletka europejska</div><div class="li"><span class="dot">·</span>37 numerów, zasady europejskie</div><div class="li"><span class="dot">·</span>Czysta gra losowa — zakłady i koło</div><div class="li"><span class="dot">·</span>Poziom trudności jej nie zmienia</div></div></div><div class="callout">Czysta logika gier żyje w /engine, niezależna od API i bazy — łatwa do testów i trenowania.</div></div><div class="chrome-bottom"><span>Inteligentne Kasyno · projekt zespołowy</span><span>Gry</span></div></section>
+<section class="slide"><div class="chrome-top"><div><div class="brand">INTELIGENTNE KASYNO</div><div class="eyebrow">06 / Przeciwnik AI</div></div><div class="meta">Inteligentne Kasyno · Inżynieria oprogramowania<br>Czerwiec 2026 · 7 / 12</div></div><div class="body"><h2 class="sm">Trzy poziomy trudności przeciwnika.</h2><p class="sub" style="margin-top:14px;">Ta sama gra, inna polityka bota — wybierana w locie z rejestru.</p><div class="cols c3"><div class="blk"><div class="num">EASY</div><div class="bt">Losowy</div><div class="bd">Losowe legalne ruchy. Dla początkujących i do testów.</div></div><div class="blk"><div class="num">MEDIUM</div><div class="bt">Heurystyka</div><div class="bd">Blackjack: basic strategy. Poker: gra oparta na sile ręki.</div></div><div class="blk"><div class="num">HARD</div><div class="bt">Deep RL</div><div class="bd">Polityka PPO/DQN/Q-Learning, uczona na symulacjach. Z miękkim fallbackiem, gdy brak wag.</div></div></div><div class="callout">Polityki są cache'owane per (gra, trudność) — model ładuje się raz i jest współdzielony przez wszystkie stoły.</div></div><div class="chrome-bottom"><span>Inteligentne Kasyno · projekt zespołowy</span><span>Poziomy trudności</span></div></section>
+<section class="slide"><div class="chrome-top"><div><div class="brand">INTELIGENTNE KASYNO</div><div class="eyebrow">07 / Trening</div></div><div class="meta">Inteligentne Kasyno · Inżynieria oprogramowania<br>Czerwiec 2026 · 8 / 12</div></div><div class="body"><h2 class="sm">Jak powstają agenci.</h2><p class="sub" style="margin-top:14px;">Osobne środowisko treningowe (/rl_training) z eksportem wag do inferencji.</p><div class="cols c3"><div class="blk"><div class="num">01</div><div class="bt">Środowiska</div><div class="bd">Symulatory blackjacka i pokera w stylu Gymnasium — pełne reguły, nagroda za wynik rundy.</div></div><div class="blk"><div class="num">02</div><div class="bt">Trening</div><div class="bd">Q-Learning (tabela) dla prostych stanów, PPO/DQN (deep RL) dla pokera.</div></div><div class="blk"><div class="num">03</div><div class="bt">Wdrożenie</div><div class="bd">Wagi z /saved_models ładuje rejestr; brak torch → graceful fallback.</div></div></div><div class="callout">Aplikacja nigdy nie zależy twardo od PyTorcha — gdy modelu brak, bot schodzi do heurystyki i gra dalej.</div></div><div class="chrome-bottom"><span>Inteligentne Kasyno · projekt zespołowy</span><span>Jak powstają agenci</span></div></section>
+<section class="slide"><div class="chrome-top"><div><div class="brand">INTELIGENTNE KASYNO</div><div class="eyebrow">08 / Real-time</div></div><div class="meta">Inteligentne Kasyno · Inżynieria oprogramowania<br>Czerwiec 2026 · 9 / 12</div></div><div class="body"><h2 class="sm">Rozgrywka w czasie rzeczywistym.</h2><div class="cols c2" style="margin-top:24px;"><div class="panel"><div class="ph">WebSockets</div><div class="li"><span class="dot">·</span>Stan stołu pushowany do graczy na żywo</div><div class="li"><span class="dot">·</span>Autoryzacja przez jednorazowy ticket w Redisie</div><div class="li"><span class="dot">·</span>Osobne kanały: poker oraz blackjack / ruletka</div></div><div class="panel"><div class="ph">Gorący stan w Redisie</div><div class="li"><span class="dot">·</span>Rozdanie i stan rundy w pamięci (O(1))</div><div class="li"><span class="dot">·</span>Bot odczytuje stan z Redisa na każdym kroku</div><div class="li"><span class="dot">·</span>Brak obciążenia PostgreSQL przy każdym ruchu</div></div></div><div class="callout">Setki ruchów na minutę nie dotykają bazy relacyjnej — ta zapisuje tylko wynik rundy i portfel.</div></div><div class="chrome-bottom"><span>Inteligentne Kasyno · projekt zespołowy</span><span>Czas rzeczywisty</span></div></section>
+<section class="slide"><div class="chrome-top"><div><div class="brand">INTELIGENTNE KASYNO</div><div class="eyebrow">09 / Portfel</div></div><div class="meta">Inteligentne Kasyno · Inżynieria oprogramowania<br>Czerwiec 2026 · 10 / 12</div></div><div class="body"><h2 class="sm">Portfel, płatności i retencja.</h2><div class="cols c2" style="margin-top:24px;"><div class="panel"><div class="ph">Płatności — Stripe</div><div class="li"><span class="dot">·</span>Stripe Checkout na doładowanie żetonów</div><div class="li"><span class="dot">·</span>Realizacja przez webhook checkout.session.completed</div><div class="li"><span class="dot">·</span>Tryb symulacji bez kluczy — działa lokalnie</div></div><div class="panel"><div class="ph">Retencja</div><div class="li"><span class="dot">·</span>Bonus powitalny przy rejestracji</div><div class="li"><span class="dot">·</span>Bad-beat bonus za pechowe przegrane</div><div class="li"><span class="dot">·</span>Historia transakcji i poziom bonusów w portfelu</div></div></div><div class="callout">Portfel jest transakcyjny (ACID) — każdy zakład, wygrana i bonus to wpis w historii.</div></div><div class="chrome-bottom"><span>Inteligentne Kasyno · projekt zespołowy</span><span>Płatności i retencja</span></div></section>
+<section class="slide"><div class="chrome-top"><div><div class="brand">INTELIGENTNE KASYNO</div><div class="eyebrow">10 / Wdrożenie</div></div><div class="meta">Inteligentne Kasyno · Inżynieria oprogramowania<br>Czerwiec 2026 · 11 / 12</div></div><div class="body"><h2 class="sm">Od kodu do działającej chmury.</h2><div class="cols c3"><div class="blk"><div class="num">01</div><div class="bt">Docker</div><div class="bd">Cały stos w Docker Compose: backend, frontend, Postgres, Redis.</div></div><div class="blk"><div class="num">02</div><div class="bt">Render</div><div class="bd">Blueprint render.yaml stawia 4 zasoby na darmowym tierze, jeden region.</div></div><div class="blk"><div class="num">03</div><div class="bt">Migracje</div><div class="bd">Start kontenera robi alembic upgrade i wstaje na $PORT — jeden krok.</div></div></div><div class="callout">Aplikacja działa na żywo na Render (frankfurt); frontend proxuje /api i /ws do backendu — ten sam origin.</div></div><div class="chrome-bottom"><span>Inteligentne Kasyno · projekt zespołowy</span><span>Deployment</span></div></section>
+<section class="slide"><div class="chrome-top"><div><div class="brand">INTELIGENTNE KASYNO</div><div class="eyebrow">11 / Co dalej</div></div><div class="meta">Inteligentne Kasyno · Inżynieria oprogramowania<br>Czerwiec 2026 · 12 / 12</div></div><div class="body"><h2 class="sm">Co dalej.</h2><div class="cols c3" style="margin-top:26px;"><div class="panel"><div class="ph">Teraz</div><div class="li"><span class="dot">·</span>Trzy grywalne gry z botami RL</div><div class="li"><span class="dot">·</span>Portfel, płatności, retencja</div><div class="li"><span class="dot">·</span>Wdrożone i działające w chmurze</div></div><div class="panel"><div class="ph">Następne</div><div class="li"><span class="dot">·</span>Silniejsi agenci pokera (więcej PPO)</div><div class="li"><span class="dot">·</span>Statystyki i tabela wyników graczy</div><div class="li"><span class="dot">·</span>Telemetria i tuning trudności</div></div><div class="panel"><div class="ph">Później</div><div class="li"><span class="dot">·</span>Więcej gier i wariantów stołów</div><div class="li"><span class="dot">·</span>Tryb turniejowy</div><div class="li"><span class="dot">·</span>Personalizacja bonusów per gracz</div></div></div><h2 style="margin-top:40px;">Dziękujemy.</h2><p class="sub" style="margin-top:10px;">Demo na żywo: kasyno-jb-frontend.onrender.com</p></div><div class="chrome-bottom"><span>Inteligentne Kasyno · projekt zespołowy</span><span>Podsumowanie</span></div></section>
+</div>
+<div id="pageind">01 / 12</div>
+<div id="hint">← → · F fullscreen · P print</div>
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  let i=0; const ind=document.getElementById('pageind');
+  function show(n){
+    i=Math.max(0,Math.min(slides.length-1,n));
+    slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+    ind.textContent=String(i+1).padStart(2,'0')+' / '+String(slides.length).padStart(2,'0');
+  }
+  function fit(){
+    const s=document.getElementById('stage');
+    const sc=Math.min(window.innerWidth/1280,window.innerHeight/720);
+    s.style.transform='scale('+sc+')';
+  }
+  window.addEventListener('resize',fit); fit(); show(0);
+  document.addEventListener('keydown',e=>{
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){show(i+1);e.preventDefault();}
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'){show(i-1);}
+    else if(e.key==='Home'){show(0);}
+    else if(e.key==='End'){show(slides.length-1);}
+    else if(e.key.toLowerCase()==='f'){if(!document.fullscreenElement)document.documentElement.requestFullscreen();else document.exitFullscreen();}
+    else if(e.key.toLowerCase()==='p'){
+      slides.forEach(s=>s.classList.add('print'));window.print();
+      setTimeout(()=>slides.forEach(s=>s.classList.remove('print')),500);
+    }
+  });
+  document.getElementById('stage').addEventListener('click',e=>{
+    const x=e.clientX/window.innerWidth; show(x>0.5?i+1:i-1);
+  });
+</script>
+</body>
+</html>
