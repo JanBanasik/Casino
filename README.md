@@ -348,24 +348,15 @@ Cały stos stawia się z jednego blueprintu **[`render.yaml`](render.yaml)** (da
 
 Deploy: Render Dashboard → **New → Blueprint** → wskaż to repo → **Apply**.
 
-## 9. Prezentacja
-
-Deck projektu (HTML + PPTX) generuje skrypt w katalogu [`presentation/`](presentation/):
-
-```bash
-python3 presentation/generate_presentation.py
-# → presentation/presentation.html  (otwórz w przeglądarce: ← → · F · P)
-# → presentation/presentation.pptx
-```
-
-## 10. Zespół
+## 9. Zespół
 
 | Autor | GitHub |
 | --- | --- |
 | Jan Banasik | [@JanBanasik](https://github.com/JanBanasik) |
 | Patrick Bajorski | [@bajorski16](https://github.com/bajorski16) |
-| Filip | [@g13filip](https://github.com/g13filip) |
+| Gabriel Filipowicz | [@g13filip](https://github.com/g13filip) |
+| Antoni Pater | [@antoniopater](https://github.com/antoniopater) |
 
-## 11. Licencja
+## 10. Licencja
 
 Projekt udostępniony na licencji **MIT** — szczegóły w pliku [LICENSE](LICENSE).
