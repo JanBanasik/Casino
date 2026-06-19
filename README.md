@@ -1,4 +1,26 @@
-# Inteligentne Kasyno: Platforma gier oparta na agentach RL
+# 🎰 Inteligentne Kasyno
+
+> Webowa platforma kasyna, w której grasz w **blackjacka, pokera (Texas Hold'em) i ruletkę** przeciwko agentom AI trenowanym metodami uczenia ze wzmocnieniem (Reinforcement Learning).
+
+[![CI](https://github.com/JanBanasik/Casino/actions/workflows/ci.yml/badge.svg)](https://github.com/JanBanasik/Casino/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![React](https://img.shields.io/badge/React-TypeScript-61DAFB?logo=react&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white)
+
+**🔗 Live demo:** **https://kasyno-jb-frontend.onrender.com**
+
+> ℹ️ Hostowane na darmowym tierze Render — po dłuższej bezczynności pierwsze wejście budzi serwer (~30–60 s zimnego startu). Odśwież po chwili, jeśli strona ładuje się długo.
+
+## Zrzuty ekranu
+
+| Lobby | Blackjack |
+| :---: | :---: |
+| ![Lobby](docs/screenshots/lobby.png) | ![Blackjack](docs/screenshots/blackjack.png) |
+| **Poker (Texas Hold'em)** | **Konto i płatności** |
+| ![Poker](docs/screenshots/poker.png) | ![Płatności](docs/screenshots/konto-platnosci.png) |
+
+> 📷 _Wrzuć zrzuty ekranu do katalogu `docs/screenshots/` pod nazwami `lobby.png`, `blackjack.png`, `poker.png`, `konto-platnosci.png`, a pojawią się powyżej._
 
 ## 1. Wstęp i Cel Projektu
 
@@ -201,6 +223,32 @@ sequenceDiagram
     WS-->>P: Wynik końcowy rundy i nowe saldo
 ```
 
+### 4.4 Wybór polityki bota wg poziomu trudności
+
+Serce „inteligencji” kasyna. Każdy stół ma poziom trudności, a rejestr
+(`backend/app/ml_inference/registry.py`) mapuje go na konkretną politykę bota —
+z **miękkim fallbackiem**: gdy brak wag modelu lub PyTorcha, bot schodzi do
+prostszej strategii i gra dalej (aplikacja nigdy nie zależy twardo od ML).
+
+```mermaid
+flowchart TD
+    Start[Ruch bota przy stole] --> D{Poziom trudności?}
+
+    D -- easy --> E[Losowe legalne ruchy<br/>RandomLegalPolicy]
+    D -- medium --> M[Heurystyka<br/>Blackjack: basic strategy<br/>Poker: siła ręki]
+    D -- hard --> H{Dostępny model deep-RL?}
+
+    H -- tak --> RL[PPO / DQN / Q-Learning<br/>Stable-Baselines3 lub Q-table]
+    H -- brak wag / brak torch --> FB[Graceful fallback<br/>→ heurystyka medium]
+
+    E --> Act[Zwróć akcję]
+    M --> Act
+    RL --> Act
+    FB --> Act
+
+    Note[Polityki cache'owane per gra + trudność<br/>model ładuje się raz, współdzielony przez stoły] -.-> D
+```
+
 ## 5. System Retencji (RetentionService)
 
 Mechanizm behawioralny mający na celu utrzymanie zaangażowania gracza, zaimplementowany jako system event-driven.
@@ -252,8 +300,8 @@ Token JWT **nie** trafia do URL. Flow:
 ### Produkcja (Docker Compose)
 
 ```bash
-export JWT_SECRET_KEY=$(openssl rand -hex 32)
-make prod-up    # frontend http://localhost:8080
+cp .env.example .env                       # uzupełnij JWT_SECRET_KEY (openssl rand -hex 32)
+make prod-up                               # frontend http://localhost:8080
 make prod-down
 ```
 
@@ -265,3 +313,59 @@ Stack: `postgres`, `redis`, `backend`, `frontend` (nginx proxy dla `/api` i `/ws
 make lint
 make test
 ```
+
+## 7. Płatności (Stripe)
+
+Doładowanie wirtualnych żetonów odbywa się przez **Stripe Checkout**.
+
+- **Tryb symulacji (domyślny, bez kluczy)** — gdy `STRIPE_SECRET_KEY` jest pusty,
+  żetony są dopisywane natychmiast, bez realnego obciążenia. Idealne na demo i dev.
+- **Tryb realny** — ustaw klucze testowe Stripe w `.env`. Doładowanie tworzy sesję
+  Checkout, a fulfillment (dopisanie żetonów) realizuje webhook
+  `checkout.session.completed` na `POST /api/payments/webhook`.
+- **Webhook lokalnie:**
+  ```bash
+  stripe listen --forward-to localhost:8000/api/payments/webhook
+  # sekret z tej komendy → STRIPE_WEBHOOK_SECRET w backend/.env
+  ```
+- Kurs wymiany i waluta są konfigurowalne (`CHIPS_PER_CURRENCY_UNIT`, `PAYMENT_CURRENCY`).
+
+> 💳 Do testów użyj karty Stripe `4242 4242 4242 4242`, dowolna przyszła data i CVC.
+
+## 8. Wdrożenie (Render)
+
+Cały stos stawia się z jednego blueprintu **[`render.yaml`](render.yaml)** (darmowy tier).
+
+- **4 zasoby:** `kasyno-jb-frontend` (nginx + SPA), `kasyno-jb-backend` (FastAPI),
+  `kasyno-jb-db` (PostgreSQL), `kasyno-jb-redis` (Key Value) — wszystkie w jednym
+  regionie (wewnętrzny hostname bazy rozwiązuje się tylko w obrębie regionu).
+- **Migracje w starcie** — kontener backendu robi `alembic upgrade head`, po czym
+  wstaje na `$PORT` (komenda jest w `backend/Dockerfile`, nie w `render.yaml`).
+- **Frontend jako proxy** — nginx przekierowuje `/api` i `/ws` do backendu (ten sam
+  origin), URL backendu wstrzykiwany przez `BACKEND_URL` (envsubst).
+- Sekrety Stripe ustawia się ręcznie w panelu Render (sync: false) — patrz
+  [`.env.example`](.env.example).
+
+Deploy: Render Dashboard → **New → Blueprint** → wskaż to repo → **Apply**.
+
+## 9. Prezentacja
+
+Deck projektu (HTML + PPTX) generuje skrypt w katalogu [`presentation/`](presentation/):
+
+```bash
+python3 presentation/generate_presentation.py
+# → presentation/presentation.html  (otwórz w przeglądarce: ← → · F · P)
+# → presentation/presentation.pptx
+```
+
+## 10. Zespół
+
+| Autor | GitHub |
+| --- | --- |
+| Jan Banasik | [@JanBanasik](https://github.com/JanBanasik) |
+| Patrick Bajorski | [@bajorski16](https://github.com/bajorski16) |
+| Filip | [@g13filip](https://github.com/g13filip) |
+
+## 11. Licencja
+
+Projekt udostępniony na licencji **MIT** — szczegóły w pliku [LICENSE](LICENSE).
