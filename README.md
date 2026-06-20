@@ -356,7 +356,7 @@ Deploy: Render Dashboard → **New → Blueprint** → wskaż to repo → **Appl
 | Autor | GitHub |
 | --- | --- |
 | Jan Banasik | [@JanBanasik](https://github.com/JanBanasik) |
-| Patrick Bajorski | [@bajorski16](https://github.com/bajorski16) |
+| Patrick Bajorski | [@bajorski16](https://github.com/BajorskiPatrick) |
 | Gabriel Filipowicz | [@g13filip](https://github.com/g13filip) |
 | Antoni Pater | [@antoniopater](https://github.com/antoniopater) |
 
